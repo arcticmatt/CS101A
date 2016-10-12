@@ -1,12 +1,21 @@
 import requests
 import csv
 import base64
+import collections
 
-starting_offset = 0
 CLIENT_ID = '4f7d3159a034481da00aa49e62f13d44'
 CLIENT_SECRET = '4fccce79c4e643f2852db7ad12327b6a' # SHHHHH
-YEARS = range(1960, 1961)
-SONGS_PER_YEAR = 2
+
+YEARS = range(1960, 1962)
+SONGS_PER_YEAR = 10
+
+SONG_FILENAME = 'song_data.csv'
+START_OFFSET_FILENAME = 'end_offsets.csv'
+END_OFFSET_FILENAME = 'end_offsets.csv'
+
+start_offsets = {year: 0 for year in YEARS}
+end_offsets = collections.OrderedDict()
+LOAD_START_OFFSETS = False
 
 
 # Used to store Spotify album information.
@@ -80,7 +89,7 @@ def get_songs(year, starting_offset, num_songs=100, access_token=None):
             songs = album_songs_req.json()['items']
 
             for song in songs:
-                print 'Processing songs for album {}'.format(album_req.json()['name'].encode('ascii', 'ignore'))
+                print 'Processing songs for album {}'.format(album_req.json()['name'].encode('utf-8'))
                 if song['preview_url']:
                     # Get song information (so we can get song popularity).
                     # Note that a list of genres is given in the album_req.
@@ -91,6 +100,7 @@ def get_songs(year, starting_offset, num_songs=100, access_token=None):
                     songs_for_year.append(song_obj)
                     songs_proc += 1
                     if songs_proc == num_songs:
+                        end_offsets[year] = albums_proc + req.json()['albums']['limit']
                         return songs_for_year
                     # print 'Preview url found for song {}'.format(song_obj.name)
                     break
@@ -102,12 +112,37 @@ def get_songs(year, starting_offset, num_songs=100, access_token=None):
     return songs_for_year
 
 
-def write_csv(filename):
+def load_start_offset_data(filename):
+    offsets = collections.OrderedDict()
+    with open(filename, 'r') as csvfile:
+        reader = csv.DictReader(csvfile, fieldnames=['year', 'offset'])
+        for row in reader:
+            year = int(row['year'])
+            offset = int(row['offset'])
+            offsets[year] = offset
+    return offsets
+
+
+def write_end_offset_data(filename):
+    with open(filename, 'w+') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        for year, end_offset in end_offsets.iteritems():
+            writer.writerow([year, end_offset])
+
+
+def write_song_data(filename, songs):
+    '''
+    SOLUTION 3: ENCODE LATE
+    http://farmdev.com/talks/unicode/
+    '''
+
     with open(filename, 'w+') as csvfile:
         writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
         for song in songs:
-            writer.writerow([song.song_id, song.name, song.year, song.popularity,
-                             song.preview_url, song.binary_data])
+            writer.writerow([song.song_id, song.name.encode('utf-8'), song.year,
+                             song.popularity, song.preview_url,
+                             song.binary_data])
+
 
 if __name__ == '__main__':
     auth_field = 'Basic ' + base64.b64encode(CLIENT_ID + ':' + CLIENT_SECRET)
@@ -119,12 +154,18 @@ if __name__ == '__main__':
     print 'Using access token, valid for {} minutes'.format(
         access_token_req.json()['expires_in'] / 60.0)
 
+    if LOAD_START_OFFSETS:
+        start_offsets = load_start_offset_data(START_OFFSET_FILENAME) 
+
     # We'll use albums from the 60's to the 00's
     print 'Getting {} songs from {}'.format(SONGS_PER_YEAR * len(YEARS), YEARS)
     songs = []
     for year in YEARS:
-        songs += get_songs(year=year, starting_offset=starting_offset, 
+        songs += get_songs(year=year, starting_offset=start_offsets[year], 
                            num_songs=SONGS_PER_YEAR, access_token=access_token)
 
-    print 'Writing data to CSV...'
-    write_csv('song_data.csv')
+    print 'Writing song data to CSV...'
+    write_song_data(SONG_FILENAME, songs)
+
+    print 'Writing end offset data to CSV...'
+    write_end_offset_data(END_OFFSET_FILENAME)
