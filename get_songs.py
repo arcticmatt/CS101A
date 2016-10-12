@@ -3,6 +3,10 @@ import csv
 import base64
 
 starting_offset = 0
+CLIENT_ID = '4f7d3159a034481da00aa49e62f13d44'
+CLIENT_SECRET = '4fccce79c4e643f2852db7ad12327b6a' # SHHHHH
+YEARS = range(1960, 1961)
+SONGS_PER_YEAR = 2
 
 
 # Used to store Spotify album information.
@@ -50,12 +54,13 @@ def create_album(album_req):
     return Album(album_date, album_genres)
 
 
-def get_songs(year, starting_offset, num_songs=100):
+def get_songs(year, starting_offset, num_songs=100, access_token=None):
+    auth_field = 'Bearer ' + access_token if access_token else None
     songs_for_year = []
     songs_proc = 0
     albums_proc = 0
     req_str = 'https://api.spotify.com/v1/search?q=year:{0}&type=album&offset={1}'.format(year, starting_offset)
-    req = requests.get(req_str)
+    req = requests.get(req_str, headers={'Authorization': auth_field})
 
     while songs_proc < num_songs:
         print '{} albums processed, {} songs processed...'.format(albums_proc, songs_proc)
@@ -69,8 +74,9 @@ def get_songs(year, starting_offset, num_songs=100):
         # For each album, iterate through songs until we come across a song
         # with a preview_url
         for album in albums:
-            album_req = requests.get(album['href'])
-            album_songs_req = requests.get(album_req.json()['tracks']['href'])
+            album_req = requests.get(album['href'], headers={'Authorization': auth_field})
+            album_songs_req = requests.get(album_req.json()['tracks']['href'], 
+                                           headers={'Authorization': auth_field})
             songs = album_songs_req.json()['items']
 
             for song in songs:
@@ -79,7 +85,8 @@ def get_songs(year, starting_offset, num_songs=100):
                     # Get song information (so we can get song popularity).
                     # Note that a list of genres is given in the album_req.
                     album_obj = create_album(album_req)
-                    song_req = requests.get(song['href'])
+                    song_req = requests.get(song['href'], 
+                                            headers={'Authorization': auth_field})
                     song_obj = create_song(song_req, album_obj)
                     songs_for_year.append(song_obj)
                     songs_proc += 1
@@ -88,25 +95,36 @@ def get_songs(year, starting_offset, num_songs=100):
                     # print 'Preview url found for song {}'.format(song_obj.name)
                     break
 
-        req = requests.get(req.json()['albums']['next'])
+        req = requests.get(req.json()['albums']['next'], headers={'Authorization': auth_field})
         albums_proc += req.json()['albums']['limit']
         print ''
 
     return songs_for_year
 
 
-# We'll use albums from the 60's to the 00's
-years = range(1960, 1961)
-songs_per_year = 2
-print 'Getting {} songs from {}'.format(songs_per_year * len(years), years)
-songs = []
-for year in years:
-    songs += get_songs(year, starting_offset, songs_per_year)
+def write_csv(filename):
+    with open(filename, 'w+') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        for song in songs:
+            writer.writerow([song.song_id, song.name, song.year, song.popularity,
+                             song.preview_url, song.binary_data])
 
+if __name__ == '__main__':
+    auth_field = 'Basic ' + base64.b64encode(CLIENT_ID + ':' + CLIENT_SECRET)
+    # Get access token using Spotify credentials
+    access_token_req = requests.post("https://accounts.spotify.com/api/token", 
+                                     data={'grant_type': 'client_credentials'},
+                                     headers={'Authorization': auth_field})
+    access_token = access_token_req.json()['access_token'] 
+    print 'Using access token, valid for {} minutes'.format(
+        access_token_req.json()['expires_in'] / 60.0)
 
-print 'Writing data to CSV...'
-with open('song_data.csv', 'w+') as csvfile:
-    writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-    for song in songs:
-        writer.writerow([song.song_id, song.name, song.year, song.popularity,
-                         song.preview_url, song.binary_data])
+    # We'll use albums from the 60's to the 00's
+    print 'Getting {} songs from {}'.format(SONGS_PER_YEAR * len(YEARS), YEARS)
+    songs = []
+    for year in YEARS:
+        songs += get_songs(year=year, starting_offset=starting_offset, 
+                           num_songs=SONGS_PER_YEAR, access_token=access_token)
+
+    print 'Writing data to CSV...'
+    write_csv('song_data.csv')
