@@ -4,8 +4,8 @@ import base64
 import collections
 import time
 
-CLIENT_ID = '4f7d3159a034481da00aa49e62f13d44'
-CLIENT_SECRET = '4fccce79c4e643f2852db7ad12327b6a' # SHHHHH
+CLIENT_ID = input("CLIENT_ID: ")
+CLIENT_SECRET = input("CLIENT_SECRET: ")
 
 YEARS = range(1960, 1970)
 SONGS_PER_YEAR = 1000
