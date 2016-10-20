@@ -108,6 +108,10 @@ class SpotifyClient:
             return []
 
     def get_songs(self, year, offset):
+        '''
+        Get all songs across all albums for the specified year at the given search
+        offset.
+        '''
         albums = self._get_albums(year, offset)
         songs = []
         # For each album, iterate through songs until we come across a song
@@ -180,9 +184,11 @@ class SpotifyClient:
         return req_f(url, headers={'Authorization': auth_field})
 
 class Scraper:
-    def __init__(self, client, offsets):
+    def __init__(self, client, offsets, song_data_csv):
         self.client = client
         self.offsets = offsets
+        # Path to output file, where song data will be written
+        self.song_data_csv = song_data_csv
 
     def get_songs(self, start_year, end_year, songs_per_year):
         years = range(start_year, end_year)
@@ -190,7 +196,7 @@ class Scraper:
         for year in years:
             print "Loading %s songs for year %s starting at song offset %s"%(songs_per_year,
                 year, self.offsets.get(year))
-            songs = get_songs_for_year(year=year, starting_offset=self.offsets.get(year),
+            songs = self._get_songs_for_year(year=year, starting_offset=self.offsets.get(year),
                                num_songs=songs_per_year)
 
             print 'Writing song data to CSV...'
@@ -199,7 +205,7 @@ class Scraper:
             print 'Writing end offset data to CSV...'
             write_end_offset_data(END_OFFSET_FILENAME)
 
-    def get_songs_for_year(self, year, offset, num_songs):
+    def _get_songs_for_year(self, year, offset, num_songs):
         '''
         Get <num_songs> songs for the specified year, looking at albums starting from
         offset <offset>.
@@ -208,16 +214,9 @@ class Scraper:
         songs_proc = 0
         albums_proc = 0
 
-        songs = self.client.get_songs(self, year, offset, num_songs)
-        for song in songs:
-            print 'Processing songs for album {}'.format(album_req.json()['name'].encode('utf-8'))
-
-
-        req = make_authorized_request(req.json()['albums']['next'], requests.get)
-        albums_proc += req.json()['albums']['limit']
-        print ''
-
-        return songs_for_year
+        ## TODO update offset?
+        songs = self.client.get_songs(self, year, offset)
+        return songs[:num_songs]
 
     def write_song_data(self, filename, songs):
         '''
@@ -233,19 +232,6 @@ class Scraper:
                                  song.popularity, song.preview_url,
                                  song.filename])
 
-def initialize_client():
-    if len(sys.argv) < 6:
-        print "usage: python get_songs.py client_id client_secret start_year end_year songs_per_year"
-
-    CLIENT_ID = sys.argv[1]
-    CLIENT_SECRET = sys.argv[2]
-    start_year = int(sys.argv[3])
-    end_year = int(sys.argv[4])
-    songs_per_year = int(sys.argv[5])
-    require(end_year > start_year, "End year must be greater than or equal to start year")
-
-    YEARS = range(start_year, end_year)
-    SONGS_PER_YEAR = int(raw_input("Songs per year: "))
 
 def scrape(client, start_year, end_year, songs_per_year, offsets):
 
@@ -256,8 +242,8 @@ if __name__ == '__main__':
     if len(sys.argv) < 6:
         print "usage: python get_songs.py client_id client_secret start_year end_year songs_per_year"
 
-    CLIENT_ID = sys.argv[1]
-    CLIENT_SECRET = sys.argv[2]
+    client_id = sys.argv[1]
+    client_secret = sys.argv[2]
     start_year = int(sys.argv[3])
     end_year = int(sys.argv[4])
     songs_per_year = int(sys.argv[5])
