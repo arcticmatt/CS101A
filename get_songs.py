@@ -1,18 +1,25 @@
-import requests
-import csv
 import base64
 import collections
+import csv
+import requests
+import os
 import time
+from requests.exceptions import ConnectionError
 
 CLIENT_ID = input("CLIENT_ID: ")
 CLIENT_SECRET = input("CLIENT_SECRET: ")
 
-YEARS = range(1960, 1970)
-SONGS_PER_YEAR = 1000
+YEARS = range(1960, 1961)
+SONGS_PER_YEAR = 2
 
 SONG_FILENAME = 'song_data.csv'
 START_OFFSET_FILENAME = 'end_offsets.csv'
 END_OFFSET_FILENAME = 'end_offsets.csv'
+
+MP3_SUBDIR = './mp3s/'
+if not os.path.exists(MP3_SUBDIR):
+    os.makedirs(MP3_SUBDIR)
+CHUNK_SIZE = 1024 * 1024
 
 start_offsets = {year: 0 for year in YEARS}
 end_offsets = collections.OrderedDict()
@@ -40,14 +47,17 @@ class Song:
         self.popularity = popularity
         self.preview_url = preview_url
         self.genres = genres
-        # base 64 encoded data
-        self.binary_data = self.get_binary_song_data(preview_url)
+        self.filename = MP3_SUBDIR + str(self.song_id) + '.mp3'
 
-    def get_binary_song_data(self, url):
-        r = requests.get(url)
-        # binary data
-        song_data = r.content
-        return base64.b64encode(song_data)
+    def download_song(self):
+        try:
+            r = requests.get(self.preview_url)
+        except ConnectionError as e:
+            print 'Error downloading preview_url {}, error = {}'.format(self.preview_url, e)
+
+        with open(self.filename, 'wb') as fd:
+            for chunk in r.iter_content(CHUNK_SIZE):
+                fd.write(chunk)
 
 
 def create_song(song_req, album_obj):
@@ -162,9 +172,10 @@ def write_song_data(filename, songs):
     with open(filename, 'w+') as csvfile:
         writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
         for song in songs:
+            song.download_song()
             writer.writerow([song.song_id, song.name.encode('utf-8'), song.year,
                              song.popularity, song.preview_url,
-                             song.binary_data])
+                             song.filename])
 
 
 def set_access_token():
