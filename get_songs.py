@@ -56,12 +56,12 @@ class SongOffset:
     '''
     def __init__(self, filename):
         self.filename = filename
-        self.offsets = self.load_offsets()
+        self.offsets = self._load_offsets()
 
     def get(self, year):
         return self.offsets.get(year, 0)
 
-    def load_offsets(self):
+    def _load_offsets(self):
         offsets = collections.OrderedDict()
         with open(filename, 'r') as csvfile:
             reader = csv.DictReader(csvfile, fieldnames=['year', 'offset'])
@@ -71,30 +71,31 @@ class SongOffset:
                 offsets[year] = offset
         return offsets
 
-    def update(self, year, new_offset):
+    def set(self, year, new_offset):
         self.offsets[year] = new_offset
 
-    def write(self, offsets):
+    def write(self):
         with open(filename, 'w+') as csvfile:
             writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            for year, offset in offsets.iteritems():
+            for year, offset in self.offsets.iteritems():
                 writer.writerow([year, offset])
 
 class SpotifyClient:
     '''
     Class for obtaining song data from the Spotify API
     '''
-    def __init__(self, client_id, client_secret):
+    def __init__(self, client_id, client_secret, offsets):
         self.client_id = client_id
         self.client_secret = client_secret
         self.set_access_token()
+        self.offsets = offsets
 
     def _get_albums(self, year, offset):
         '''
-        Returns 20 albums for the specified year starting from the album 
-        at the specified offset, or an empty array if an error occurs
+        Returns 20 albums for the specified year, or an empty array if an error occurs.
+        Starts searching at the specified offset
         '''
-        req_str = 'https://api.spotify.com/v1/search?q=year:{0}&type=album&offset={1}'.format(year, starting_offset)
+        req_str = 'https://api.spotify.com/v1/search?q=year:{0}&type=album&offset={1}'.format(year, offset)
         # List of 20 albums. Each item is a dictionary containing some album
         # information (album_type, available_markets, external_urls, href, id,
         # images, name, type, uri). The item does not contain the full album
@@ -107,12 +108,22 @@ class SpotifyClient:
             print 'Error parsing req {}, error = {}'.format(req.text, e)
             return []
 
-    def get_songs(self, year, offset):
+    def _get_first_song_with_preview(self, album_songs):
+        for song in album_songs:
+            if song['preview_url']:
+                # Get song information (so we can get song popularity).
+                # Note that a list of genres is given in the album_req.
+                album_obj = create_album(album_req)
+                song_req = make_authorized_request(song['href'], requests.get)
+                return create_song(song_req, album_obj)
+        return None 
+
+    def get_songs(self, year, num_songs):
         '''
-        Get all songs across all albums for the specified year at the given search
-        offset.
+        Get <num_songs> songs across all albums for the specified year, starting
         '''
-        albums = self._get_albums(year, offset)
+        curr_offset = self.offsets.get(year)
+        albums = self._get_albums(year, curr_offset)
         songs = []
         # For each album, iterate through songs until we come across a song
         # with a preview_url
@@ -127,21 +138,9 @@ class SpotifyClient:
                     songs.append(song_with_preview)
             except KeyError as e:
                 print 'Error parsing album_songs_req {}, error = {}'.format(album_req.text, e)
+        self.offsets.update(year, curr_offset + len(albums))
         return songs
 
-    def _get_first_song_with_preview(self, album_songs):
-        for song in album_songs:
-            if song['preview_url']:
-                # Get song information (so we can get song popularity).
-                # Note that a list of genres is given in the album_req.
-                album_obj = create_album(album_req)
-                song_req = make_authorized_request(song['href'], requests.get)
-                return create_song(song_req, album_obj)
-                # if songs_proc == num_songs:
-                #     end_offsets[year] = albums_proc + req.json()['albums']['limit']
-                #     return songs_for_year
-                # # print 'Preview url found for song {}'.format(song_obj.name)
-        return None 
 
     def create_song(self, song_req, album_obj):
         song_dict = song_req.json()
@@ -184,13 +183,13 @@ class SpotifyClient:
         return req_f(url, headers={'Authorization': auth_field})
 
 class Scraper:
-    def __init__(self, client, offsets, song_data_csv):
+    def __init__(self, client, offsets, song_data_csv_filename):
         self.client = client
         self.offsets = offsets
         # Path to output file, where song data will be written
-        self.song_data_csv = song_data_csv
+        self.song_data_csv_filename = song_data_csv_filename
 
-    def get_songs(self, start_year, end_year, songs_per_year):
+    def scrape(self, start_year, end_year, songs_per_year):
         years = range(start_year, end_year)
         print 'Getting {} songs from {}'.format(songs_per_year * len(years), years)
         for year in years:
@@ -199,11 +198,13 @@ class Scraper:
             songs = self._get_songs_for_year(year=year, starting_offset=self.offsets.get(year),
                                num_songs=songs_per_year)
 
+            # TODO update this to write to the right file and 
+            # obtain/save end-offset data properly
             print 'Writing song data to CSV...'
-            write_song_data(SONG_FILENAME, songs)
+            self.write_song_data(SONG_FILENAME, songs)
 
             print 'Writing end offset data to CSV...'
-            write_end_offset_data(END_OFFSET_FILENAME)
+            self.write_end_offset_data(END_OFFSET_FILENAME)
 
     def _get_songs_for_year(self, year, offset, num_songs):
         '''
@@ -233,8 +234,8 @@ class Scraper:
                                  song.filename])
 
 
-def scrape(client, start_year, end_year, songs_per_year, offsets):
-
+def scrape(client, start_year, end_year, songs_per_year, offsets, song_data_csv_filename):
+    scraper = Scraper(client, offsets, SONG_FILENAME)
 
 
 
