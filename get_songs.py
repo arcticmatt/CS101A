@@ -159,7 +159,7 @@ class SpotifyClient:
                 if song_with_preview is not None:
                     songs.append(song_with_preview)
             except KeyError as e:
-                print 'Error parsing album_songs_req {}, error = {}'.format(album_req.text, e)
+                print 'Error parsing songs for album {}, error = {}'.format(album, e)
 
         self.offsets.update(year, curr_offset + len(albums))
         return songs
@@ -173,9 +173,10 @@ class SpotifyClient:
             song_year = album_obj.date.split('-')[0]
             song_popularity = song_dict['popularity']
             song_preview_url = song_dict['preview_url']
+            return Song(song_id, song_name, song_year, song_popularity, song_preview_url, album_obj.genres)            
         except KeyError as e:
             print 'Error parsing song_req {}, error = {}'.format(song_req.text, e)
-        return Song(song_id, song_name, song_year, song_popularity, song_preview_url, album_obj.genres)
+            return None
 
     def create_album(self, album_req):
         album_dict = album_req.json()
