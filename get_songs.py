@@ -42,21 +42,23 @@ class Song:
     def download_song(self):
         try:
             r = requests.get(self.preview_url)
+            with open(self.filename, 'wb') as fd:
+                for chunk in r.iter_content(CHUNK_SIZE):
+                    fd.write(chunk)
+            return True
         except ConnectionError as e:
             print 'Error downloading preview_url {}, error = {}'.format(self.preview_url, e)
-
-        with open(self.filename, 'wb') as fd:
-            for chunk in r.iter_content(CHUNK_SIZE):
-                fd.write(chunk)
+            return False
 
     def persist(self, filename):
         print "Persisting song %s"%self.name
         with open(filename, 'a+') as csvfile:
             writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            self.download_song()
-            writer.writerow([self.song_id, self.name.encode('utf-8'), self.year,
-                             self.popularity, self.preview_url,
-                             self.filename])
+            # Only save this song as a training point if we're able to download its preview
+            if self.download_song():
+                writer.writerow([self.song_id, self.name.encode('utf-8'), self.year,
+                                 self.popularity, self.preview_url,
+                                 self.filename])
 
 class AlbumOffsets:
     '''
@@ -198,9 +200,20 @@ class SpotifyClient:
 
     def make_authorized_request(self, url, req_f):
         if time.time() > self.access_token_expiry:
-            set_access_token()
-        auth_field = 'Bearer ' + self.access_token
-        return req_f(url, headers={'Authorization': auth_field})
+            self.set_access_token()
+        # Repeatedly try to make the request, waiting between successive failed
+        # requests.
+        sleep_duration = 0
+        while True:
+            try:
+                time.sleep(sleep_duration)
+                auth_field = 'Bearer ' + self.access_token
+                return req_f(url, headers={'Authorization': auth_field})
+            except ConnectionError as e:
+                sleep_duration = sleep_duration * 2 + 1
+                print "HTTP request for %s failed with ConnectionError: %s"%(url, e)
+                print "Retrying request after %s seconds"%(sleep_duration)
+
 
 class Scraper:
     def __init__(self, client, song_data_csv_filename):
