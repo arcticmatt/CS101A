@@ -128,16 +128,20 @@ class SpotifyClient:
     def _get_first_song_with_preview(self, album):
         album_req = self.make_authorized_request(album['href'], requests.get)
         print 'Processing songs for album {}'.format(album_req.json()['name'].encode('utf-8'))
-        album_songs_req = self.make_authorized_request(album_req.json()['tracks']['href'],
-                requests.get)
-        album_songs = album_songs_req.json()['items']
-        for song in album_songs:
-            if song['preview_url']:
-                # Get song information (so we can get song popularity).
-                # Note that a list of genres is given in the album_req.
-                album_obj = self.create_album(album_req)
-                song_req = self.make_authorized_request(song['href'], requests.get)
-                return self.create_song(song_req, album_obj)
+        try:
+            album_songs_req = self.make_authorized_request(album_req.json()['tracks']['href'],
+                    requests.get)
+            album_songs = album_songs_req.json()['items']
+            for song in album_songs:
+                if song['preview_url']:
+                    # Get song information (so we can get song popularity).
+                    # Note that a list of genres is given in the album_req.
+                    album_obj = self.create_album(album_req)
+                    song_req = self.make_authorized_request(song['href'], requests.get)
+                    return self.create_song(song_req, album_obj)
+        except KeyError as e:
+            print 'Error parsing album_req {} or album_songs_req {}, error = {}'.format(
+                album_req, album_songs_req, e)
         return None
 
     def get_song_batch(self, year):
@@ -154,12 +158,9 @@ class SpotifyClient:
         # For each album, iterate through songs until we come across a song
         # with a preview_url
         for album in albums:
-            try:
-                song_with_preview = self._get_first_song_with_preview(album)
-                if song_with_preview is not None:
-                    songs.append(song_with_preview)
-            except KeyError as e:
-                print 'Error parsing album_songs_req {}, error = {}'.format(album_req.text, e)
+            song_with_preview = self._get_first_song_with_preview(album)
+            if song_with_preview is not None:
+                songs.append(song_with_preview)
 
         self.offsets.update(year, curr_offset + len(albums))
         return songs
