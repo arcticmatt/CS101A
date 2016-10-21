@@ -127,6 +127,7 @@ class SpotifyClient:
 
     def _get_first_song_with_preview(self, album):
         album_req = self.make_authorized_request(album['href'], requests.get)
+        album_songs_req = None
         try:
             print 'Processing songs for album {}'.format(album_req.json()['name'].encode('utf-8'))
             album_songs_req = self.make_authorized_request(album_req.json()['tracks']['href'],
