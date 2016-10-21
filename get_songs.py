@@ -42,21 +42,23 @@ class Song:
     def download_song(self):
         try:
             r = requests.get(self.preview_url)
+            with open(self.filename, 'wb') as fd:
+                for chunk in r.iter_content(CHUNK_SIZE):
+                    fd.write(chunk)
+            return True
         except ConnectionError as e:
             print 'Error downloading preview_url {}, error = {}'.format(self.preview_url, e)
-
-        with open(self.filename, 'wb') as fd:
-            for chunk in r.iter_content(CHUNK_SIZE):
-                fd.write(chunk)
+            return False
 
     def persist(self, filename):
         print "Persisting song %s"%self.name
         with open(filename, 'a+') as csvfile:
             writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            self.download_song()
-            writer.writerow([self.song_id, self.name.encode('utf-8'), self.year,
-                             self.popularity, self.preview_url,
-                             self.filename])
+            # Only save this song as a training point if we're able to download its preview
+            if self.download_song():
+                writer.writerow([self.song_id, self.name.encode('utf-8'), self.year,
+                                 self.popularity, self.preview_url,
+                                 self.filename])
 
 class AlbumOffsets:
     '''
@@ -125,17 +127,22 @@ class SpotifyClient:
 
     def _get_first_song_with_preview(self, album):
         album_req = self.make_authorized_request(album['href'], requests.get)
-        print 'Processing songs for album {}'.format(album_req.json()['name'].encode('utf-8'))
-        album_songs_req = self.make_authorized_request(album_req.json()['tracks']['href'],
-                requests.get)
-        album_songs = album_songs_req.json()['items']
-        for song in album_songs:
-            if song['preview_url']:
-                # Get song information (so we can get song popularity).
-                # Note that a list of genres is given in the album_req.
-                album_obj = self.create_album(album_req)
-                song_req = self.make_authorized_request(song['href'], requests.get)
-                return self.create_song(song_req, album_obj)
+        album_songs_req = None
+        try:
+            print 'Processing songs for album {}'.format(album_req.json()['name'].encode('utf-8'))
+            album_songs_req = self.make_authorized_request(album_req.json()['tracks']['href'],
+                    requests.get)
+            album_songs = album_songs_req.json()['items']
+            for song in album_songs:
+                if song['preview_url']:
+                    # Get song information (so we can get song popularity).
+                    # Note that a list of genres is given in the album_req.
+                    album_obj = self.create_album(album_req)
+                    song_req = self.make_authorized_request(song['href'], requests.get)
+                    return self.create_song(song_req, album_obj)
+        except KeyError as e:
+            print 'Error parsing album_req {} or album_songs_req {}, error = {}'.format(
+                album_req, album_songs_req, e)
         return None
 
     def get_song_batch(self, year):
@@ -152,12 +159,9 @@ class SpotifyClient:
         # For each album, iterate through songs until we come across a song
         # with a preview_url
         for album in albums:
-            try:
-                song_with_preview = self._get_first_song_with_preview(album)
-                if song_with_preview is not None:
-                    songs.append(song_with_preview)
-            except KeyError as e:
-                print 'Error parsing album_songs_req {}, error = {}'.format(album_req.text, e)
+            song_with_preview = self._get_first_song_with_preview(album)
+            if song_with_preview is not None:
+                songs.append(song_with_preview)
 
         self.offsets.update(year, curr_offset + len(albums))
         return songs
@@ -198,9 +202,20 @@ class SpotifyClient:
 
     def make_authorized_request(self, url, req_f):
         if time.time() > self.access_token_expiry:
-            set_access_token()
-        auth_field = 'Bearer ' + self.access_token
-        return req_f(url, headers={'Authorization': auth_field})
+            self.set_access_token()
+        # Repeatedly try to make the request, waiting between successive failed
+        # requests.
+        sleep_duration = 0
+        while True:
+            try:
+                time.sleep(sleep_duration)
+                auth_field = 'Bearer ' + self.access_token
+                return req_f(url, headers={'Authorization': auth_field})
+            except ConnectionError as e:
+                sleep_duration = sleep_duration * 2 + 1
+                print "HTTP request for %s failed with ConnectionError: %s"%(url, e)
+                print "Retrying request after %s seconds"%(sleep_duration)
+
 
 class Scraper:
     def __init__(self, client, song_data_csv_filename):
