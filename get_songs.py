@@ -49,7 +49,7 @@ class Song:
         except ConnectionError as e:
             print 'Error downloading preview_url {}, error = {}'.format(self.preview_url, e)
             return False
-
+            
     def persist(self, filename):
         print "Persisting song %s"%self.name
         with open(filename, 'a+') as csvfile:
@@ -127,17 +127,22 @@ class SpotifyClient:
 
     def _get_first_song_with_preview(self, album):
         album_req = self.make_authorized_request(album['href'], requests.get)
-        print 'Processing songs for album {}'.format(album_req.json()['name'].encode('utf-8'))
-        album_songs_req = self.make_authorized_request(album_req.json()['tracks']['href'],
-                requests.get)
-        album_songs = album_songs_req.json()['items']
-        for song in album_songs:
-            if song['preview_url']:
-                # Get song information (so we can get song popularity).
-                # Note that a list of genres is given in the album_req.
-                album_obj = self.create_album(album_req)
-                song_req = self.make_authorized_request(song['href'], requests.get)
-                return self.create_song(song_req, album_obj)
+        album_songs_req = None
+        try:
+            print 'Processing songs for album {}'.format(album_req.json()['name'].encode('utf-8'))
+            album_songs_req = self.make_authorized_request(album_req.json()['tracks']['href'],
+                    requests.get)
+            album_songs = album_songs_req.json()['items']
+            for song in album_songs:
+                if song['preview_url']:
+                    # Get song information (so we can get song popularity).
+                    # Note that a list of genres is given in the album_req.
+                    album_obj = self.create_album(album_req)
+                    song_req = self.make_authorized_request(song['href'], requests.get)
+                    return self.create_song(song_req, album_obj)
+        except KeyError as e:
+            print 'Error parsing album_req {} or album_songs_req {}, error = {}'.format(
+                album_req, album_songs_req, e)
         return None
 
     def get_song_batch(self, year):

@@ -1,0 +1,61 @@
+from __future__ import print_function
+import librosa
+import sys
+import numpy as np
+import glob
+import os
+import csv
+
+
+MFCC_DATA_FILENAME = 'mfcc_data.csv'
+num_coefficients = 12
+num_frames = 301
+
+# You should run this script from where the python code is located,
+# i.e. the root folder of the project.
+
+def write_header():
+    fieldnames = ['song_id', 'decade']
+    fieldnames = fieldnames + range(num_frames * num_coefficients)
+    with open(MFCC_DATA_FILENAME, 'w') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+def write_mfcc_data_for_folder(read_file, folder_name):
+    cwd = os.getcwd()
+    wrong_len_count = 0
+    with open(read_file, 'rb') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                song_id = row[0]
+                song_year = row[2]
+                audio_path = cwd + '/' + folder_name + '/' + song_id + '.mp3'
+                # load in the audio path
+                y, sr = librosa.load(audio_path)
+
+                # For a standard 30s preview, this should give us a 12 x 300 array
+                mfcc = librosa.feature.mfcc(y=y, sr = sr, n_mfcc=num_coefficients, hop_length = 2200)
+                mfcc_all = mfcc.flatten()
+                mfcc_str = ','.join(map(str, mfcc_all))
+
+                if len(mfcc_all) != num_coefficients * num_frames:
+                    print ('wrong length for song path: ' + audio_path)
+                    wrong_len_count += 1
+                else:
+                    with open(MFCC_DATA_FILENAME, 'a+') as csvfile:
+                        writer = csv.writer(csvfile, delimiter=',')
+                        writer.writerow([song_id, song_year] + list(mfcc_all))
+
+    print (str(wrong_len_count) + " songs had the wrong length")
+
+
+print ("== Should be run from project root directory == ")
+
+write_header_flag = raw_input('Write header to mfcc_data.csv (y/n)? ')
+if write_header_flag == 'y':
+    write_header()
+    print ("== Header written == ")
+
+folder_name = raw_input('folder name to pull mp3s from w/o slashes? (eg mp3s): ')
+read_file = raw_input('file to read song data from with extension? (eg song_data.csv): ')
+write_mfcc_data_for_folder(read_file, folder_name)
