@@ -39,6 +39,17 @@ class Song:
         self.genres = genres
         self.filename = MP3_SUBDIR + str(self.song_id) + '.mp3'
 
+    def _process_name(self, name):
+        '''
+        Processes the passed-in song name string by removing all non-alphanumeric
+        characters. If the resulting string is empty, we likely have a non-English
+        song so we ignore it by returning None.
+        '''
+        result = ''.join(ch for ch in name.encode('utf-8') if ch.isalnum())
+        if len(result) > 0:
+            return result
+        return None
+
     def download_song(self):
         try:
             r = requests.get(self.preview_url)
@@ -54,9 +65,11 @@ class Song:
         print "Persisting song %s"%self.name
         with open(filename, 'a+') as csvfile:
             writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            # Only save this song as a training point if we're able to download its preview
-            if self.download_song():
-                writer.writerow([self.song_id, ''.join(ch for ch in self.name.encode('utf-8') if ch.isalnum()), 
+            # Only save this song as a training point if it has a valid name
+            # and we're able to download its preview
+            processed_name = self._process_name(self.name)
+            if processed_name is not None and self.download_song():
+                writer.writerow([self.song_id, processed_name, 
                                  self.year, self.popularity, self.preview_url,
                                  self.filename])
 

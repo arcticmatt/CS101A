@@ -1,11 +1,20 @@
+"""
+Script for processing existing scraped data to eliminate non-alphanumeric
+characters from song names.
+"""
 import sys
+import re
 
 def fix_song_name(name):
     '''
-    Eliminates non-ASCII characters from the passed-in
-    string, returning the result
+    Returns a copy of the passed-in string with non-alphanumeric chars
+    removed. For empty strings, returns None (to filter out songs consisting
+    entirely of non-alphanumeric chars, which are likely non-English songs).
     '''
-    pass
+    result = ''.join(ch for ch in name if ch.isalnum())
+    if len(result) > 0:
+        return result
+    return None
 
 def decompose(line):
     '''
@@ -23,13 +32,18 @@ def decompose(line):
 
 def fix_line(line):
     before, name, after = decompose(line)
-    return "%s%s%s"%(before, fix_song_name(name), after)
+    fixed_name = fix_song_name(name)
+    if fixed_name is not None:
+        return "%s,%s,%s"%(before, fixed_name, after)
+    return None
 
 def fix_scraped_csv(filename):
     f = open(filename)
     result_file = open("%s.fixed"%filename, "w+")
     for line in f:
-        result_file.write("%s\n"%fix_line(line))
+        processed_line = fix_line(line)
+        if processed_line is not None:
+            result_file.write("%s\n"%fix_line(line))
     result_file.close()
 
 if __name__ == "__main__":
