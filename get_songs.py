@@ -56,8 +56,8 @@ class Song:
             writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             # Only save this song as a training point if we're able to download its preview
             if self.download_song():
-                writer.writerow([self.song_id, self.name.encode('utf-8'), self.year,
-                                 self.popularity, self.preview_url,
+                writer.writerow([self.song_id, ''.join(ch for ch in self.name.encode('utf-8') if ch.isalnum()), 
+                                 self.year, self.popularity, self.preview_url,
                                  self.filename])
 
 class AlbumOffsets:
