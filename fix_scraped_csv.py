@@ -11,7 +11,7 @@ def fix_song_name(name):
     removed. For empty strings, returns None (to filter out songs consisting
     entirely of non-alphanumeric chars, which are likely non-English songs).
     '''
-    result = ''.join(ch for ch in name if ch.isalnum())
+    result = ''.join(ch for ch in name if ch.isalnum() or ch == ' ')
     if len(result) > 0:
         return result
     return None

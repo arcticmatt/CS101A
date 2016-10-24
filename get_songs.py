@@ -45,7 +45,7 @@ class Song:
         characters. If the resulting string is empty, we likely have a non-English
         song so we ignore it by returning None.
         '''
-        result = ''.join(ch for ch in name.encode('utf-8') if ch.isalnum())
+        result = ''.join(ch for ch in name.encode('utf-8') if ch.isalnum() or ch == ' ')
         if len(result) > 0:
             return result
         return None
