@@ -15,11 +15,14 @@ num_frames = 301
 # i.e. the root folder of the project.
 
 def write_header():
-    fieldnames = ['song_id', 'decade']
-    fieldnames = fieldnames + range(num_frames * num_coefficients)
+    fieldnames = ['label']
+    fieldnames = fieldnames + range(num_frames * num_coefficients) + ['song_id']
     with open(MFCC_DATA_FILENAME, 'w') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
+
+def get_label(song_year):
+    return int(song_year[2])
 
 def write_mfcc_data_for_folder(read_file, folder_name):
     cwd = os.getcwd()
@@ -29,6 +32,7 @@ def write_mfcc_data_for_folder(read_file, folder_name):
             for row in reader:
                 song_id = row[0]
                 song_year = row[2]
+                song_label = get_label(song_year)
                 audio_path = cwd + '/' + folder_name + '/' + song_id + '.mp3'
                 # load in the audio path
                 y, sr = librosa.load(audio_path)
@@ -44,7 +48,7 @@ def write_mfcc_data_for_folder(read_file, folder_name):
                 else:
                     with open(MFCC_DATA_FILENAME, 'a+') as csvfile:
                         writer = csv.writer(csvfile, delimiter=',')
-                        writer.writerow([song_id, song_year] + list(mfcc_all))
+                        writer.writerow([song_label] + list(mfcc_all) + [song_id])
 
     print (str(wrong_len_count) + " songs had the wrong length")
 
