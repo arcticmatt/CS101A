@@ -15,7 +15,7 @@ def is_train():
     return random.random() < TRAIN_PCT
 
 
-def create_train_test(csv_directory, train_fname, test_fname):
+def create_train_test(csv_directory, train_fname, test_fname, headers=True):
     '''
     Takes in 
       - directory which holds csv files to "combine" into train/test sets
@@ -41,6 +41,7 @@ def create_train_test(csv_directory, train_fname, test_fname):
         sys.exit()
     
     # Iterate through directory entries, and write rows to training/test csvs
+    wrote_header = False
     with open(train_fname, 'w') as train, open(test_fname, 'w') as test:
         train_writer = csv.writer(train, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
         test_writer = csv.writer(test, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
@@ -50,6 +51,15 @@ def create_train_test(csv_directory, train_fname, test_fname):
                 # write it to train/test, depending on weighted coin flip
                 with open(os.path.join(csv_directory, filename), 'r') as csv_read:
                     reader = csv.reader(csv_read, delimiter=',', quotechar='|')
+
+                    if headers:
+                        row = reader.next() # Skip header row
+                        if not wrote_header:
+                            # Write header rows
+                            train_writer.writerow(row)
+                            test_writer.writerow(row)
+                            wrote_header = True
+
                     for row in reader:
                         if is_train():
                             train_writer.writerow(row)
@@ -57,15 +67,17 @@ def create_train_test(csv_directory, train_fname, test_fname):
                             test_writer.writerow(row)
 
 
+
 if __name__ == '__main__':
     # Error checking
-    if len(sys.argv) < 4:
-        print 'usage: python create_train_test.py csv_directory train_fname test_fname'
+    if len(sys.argv) < 5:
+        print 'usage: python create_train_test.py csv_directory train_fname test_fname headers'
         sys.exit()
 
     csv_directory = sys.argv[1]
     train_fname = sys.argv[2]
     test_fname = sys.argv[3]
+    headers = int(sys.argv[4])
     random.seed()
 
-    create_train_test(csv_directory, train_fname, test_fname)
+    create_train_test(csv_directory, train_fname, test_fname, headers)
