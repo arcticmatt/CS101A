@@ -275,6 +275,7 @@ def scrape(client, start_year, end_year, songs_per_year, song_data_csv_filename)
 if __name__ == '__main__':
     if len(sys.argv) < 6:
         print "usage: python get_songs.py client_id client_secret start_year end_year songs_per_year"
+        sys.exit()
 
     client_id = sys.argv[1]
     client_secret = sys.argv[2]
