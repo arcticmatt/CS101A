@@ -8,15 +8,16 @@ import csv
 
 
 MFCC_DATA_FILENAME = 'mfcc_data.csv'
-num_coefficients = 12
-num_frames = 301
+NUM_COEFFS = 100
+NUM_FRAMES = 1325
+HOP_LENGTH = 500
 
 # You should run this script from where the python code is located,
 # i.e. the root folder of the project.
 
 def write_header():
     fieldnames = ['label']
-    fieldnames = fieldnames + range(num_frames * num_coefficients) + ['song_id']
+    fieldnames = fieldnames + range(NUM_FRAMES * NUM_COEFFS) + ['song_id']
     with open(MFCC_DATA_FILENAME, 'w') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -38,11 +39,11 @@ def write_mfcc_data_for_folder(read_file, folder_name):
                 y, sr = librosa.load(audio_path)
 
                 # For a standard 30s preview, this should give us a 12 x 300 array
-                mfcc = librosa.feature.mfcc(y=y, sr = sr, n_mfcc=num_coefficients, hop_length = 2200)
+                mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=NUM_COEFFS, hop_length=HOP_LENGTH)
                 mfcc_all = mfcc.flatten()
                 mfcc_str = ','.join(map(str, mfcc_all))
 
-                if len(mfcc_all) != num_coefficients * num_frames:
+                if len(mfcc_all) != NUM_COEFFS * NUM_FRAMES:
                     print ('wrong length for song path: ' + audio_path)
                     wrong_len_count += 1
                 else:
