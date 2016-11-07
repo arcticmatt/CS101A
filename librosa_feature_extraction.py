@@ -7,7 +7,7 @@ import os
 import csv
 
 
-MFCC_DATA_FILENAME = 'mfcc_data.csv'
+MFCC_DATA_FILENAME = '/data/mfcc_data.csv'
 NUM_COEFFS = 100
 NUM_FRAMES = 1325
 HOP_LENGTH = 500
@@ -26,7 +26,6 @@ def get_label(song_year):
     return int(song_year[2])
 
 def write_mfcc_data_for_folder(read_file, folder_name):
-    cwd = os.getcwd()
     wrong_len_count = 0
     with open(read_file, 'rb') as f:
             reader = csv.reader(f)
@@ -34,7 +33,7 @@ def write_mfcc_data_for_folder(read_file, folder_name):
                 song_id = row[0]
                 song_year = row[2]
                 song_label = get_label(song_year)
-                audio_path = cwd + '/' + folder_name + '/' + song_id + '.mp3'
+                audio_path = folder_name + '/' + song_id + '.mp3'
                 # load in the audio path
                 y, sr = librosa.load(audio_path)
 
@@ -43,8 +42,8 @@ def write_mfcc_data_for_folder(read_file, folder_name):
                 mfcc_all = mfcc.flatten()
                 mfcc_str = ','.join(map(str, mfcc_all))
 
-                if len(mfcc_all) != NUM_COEFFS * NUM_FRAMES:
-                    print ('wrong length for song path: ' + audio_path)
+                if len(mfcc_all) != NUM_COEFFS * (NUM_FRAMES - 1):
+                    print ('wrong length for song path: ' + audio_path + 'mfcc_length = ' + str(len(mfcc_all)))
                     wrong_len_count += 1
                 else:
                     with open(MFCC_DATA_FILENAME, 'a+') as csvfile:
@@ -61,6 +60,6 @@ if write_header_flag == 'y':
     write_header()
     print ("== Header written == ")
 
-folder_name = raw_input('folder name to pull mp3s from w/o slashes? (eg mp3s): ')
-read_file = raw_input('file to read song data from with extension? (eg song_data.csv): ')
+folder_name = raw_input('full path to song directory (without trailing slash)? (eg /data/mp3s): ')
+read_file = raw_input('full path for file to read song data from with extension? (eg /data/song_data.csv): ')
 write_mfcc_data_for_folder(read_file, folder_name)
