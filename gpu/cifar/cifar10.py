@@ -41,6 +41,7 @@ import pandas as pd
 import re
 import sys
 import tarfile
+import cifar_utils
 
 from six.moves import urllib
 import tensorflow as tf
@@ -72,13 +73,7 @@ NUM_EPOCHS_PER_DECAY = 350.0      # Epochs after which learning rate decays.
 LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
 INITIAL_LEARNING_RATE = 0.1       # Initial learning rate.
 
-# If a model is trained with multiple GPUs, prefix all Op names with tower_name
-# to differentiate the operations. Note that this prefix is removed from the
-# names of the summaries when visualizing a model.
-TOWER_NAME = 'tower'
-
 DATA_URL = 'http://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz'
-
 
 def _activation_summary(x):
   """Helper to create summaries for activations.
@@ -93,7 +88,7 @@ def _activation_summary(x):
   """
   # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
   # session. This helps the clarity of presentation on tensorboard.
-  tensor_name = re.sub('%s_[0-9]*/' % TOWER_NAME, '', x.op.name)
+  tensor_name = re.sub('%s_[0-9]*/' % cifar_utils.TOWER_NAME, '', x.op.name)
   tf.histogram_summary(tensor_name + '/activations', x)
   tf.scalar_summary(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
 
@@ -199,7 +194,7 @@ def inputs(filename):
   data, labels = map(tf.constant, get_data(filename))
 
   # Add a "channel" dimension of 1 to the data tensor
-  tf.expand_dim(data, -1)
+  data = tf.expand_dims(data, -1)
 
   data_batches = tf.split(split_dim=0, num_split=FLAGS.batch_size, value=data)
   label_batches = tf.split(split_dim=0, num_split=FLAGS.batch_size, value=data)
@@ -234,7 +229,7 @@ def inference(images):
   # conv1
   with tf.variable_scope('conv1') as scope:
     kernel = _variable_with_weight_decay('weights',
-                                         shape=[5, 5, 3, 64],
+                                         shape=[cifar_utils.NCOEFFS, cifar_utils.NSAMPLES, 1, 64],
                                          stddev=5e-2,
                                          wd=0.0)
     conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')

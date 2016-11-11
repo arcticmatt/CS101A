@@ -49,6 +49,8 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 from tensorflow.models.image.cifar10 import cifar10
 
+import cifar_utils
+
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('train_dir', '/tmp/cifar10_train',
@@ -61,8 +63,13 @@ tf.app.flags.DEFINE_integer('num_gpus', 1,
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
 
+tf.app.flags.DEFINE_string('train_data', None, 'Training data CSV')
 
-def tower_loss(scope):
+READER = cifar_utils.BatchReader(num_devices=FLAGS.num_gpus,
+  filename=FLAGS.train_data, batch_size=int(1e7),
+  line_processor=cifar_utils.SongFeatureExtractor())
+
+def tower_loss(scope, scope_name):
   """Calculate the total loss on a single tower running the CIFAR model.
 
   Args:
@@ -72,7 +79,7 @@ def tower_loss(scope):
      Tensor of shape [] containing the total loss for a batch of data
   """
   # Get images and labels for CIFAR-10.
-  images, labels = cifar10.distorted_inputs()
+  images, labels = cifar_utils.inputs(READER, scope_name)
 
   # Build inference Graph.
   logits = cifar10.inference(images)
@@ -105,7 +112,6 @@ def tower_loss(scope):
   with tf.control_dependencies([loss_averages_op]):
     total_loss = tf.identity(total_loss)
   return total_loss
-
 
 def average_gradients(tower_grads):
   """Calculate the average gradient for each shared variable across all towers.
@@ -173,11 +179,12 @@ def train():
     tower_grads = []
     for i in xrange(FLAGS.num_gpus):
       with tf.device('/gpu:%d' % i):
-        with tf.name_scope('%s_%d' % (cifar10.TOWER_NAME, i)) as scope:
+        scope_name = cifar_utils.get_scope_name(i)
+        with tf.name_scope(scope_name) as scope:
           # Calculate the loss for one tower of the CIFAR model. This function
           # constructs the entire CIFAR model but shares the variables across
           # all towers.
-          loss = tower_loss(scope)
+          loss = tower_loss(scope, scope_name)
 
           # Reuse variables for the next tower.
           tf.get_variable_scope().reuse_variables()
