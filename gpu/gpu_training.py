@@ -64,9 +64,6 @@ RMSPROP_DECAY = 0.9                # Decay term for RMSProp.
 RMSPROP_MOMENTUM = 0.9             # Momentum in RMSProp.
 RMSPROP_EPSILON = 1.0              # Epsilon term for RMSProp.
 
-# Hard-coded label/id columns
-LABEL_COL = "decade"
-ID_COL = "song_id"
 
 
 
@@ -80,6 +77,9 @@ ID_COL = "song_id"
 # ==============================================================================
 # ==============================================================================
 
+# Hard-coded label/id columns
+LABEL_COL = "decade"
+ID_COL = "song_id"
 
 def encode_labels(df):
   # Transform year into a 0/1 binary classification label
@@ -107,7 +107,7 @@ def get_synthetic_data(nfeatures, nclasses):
     for i in xrange(npoints):
         bin_rep = map(int, list(bin(i)[2:]))
         padded_bin_rep = [0] * (nfeatures - len(bin_rep)) + bin_rep
-        # if sum(padded_bin_rep) >= NFEATURES / 2:
+        # Classification rule: If feature 0 is 1, point has label 1
         if padded_bin_rep[0] == 1:
             labels.append([0, 1])
         else:
@@ -128,6 +128,10 @@ def split_batches(data, labels):
     return (data_splits, labels_splits)
 
 def error(model, data, labels):
+    '''
+    Compute classification accuracy of passed-in model on <data>, which is
+    a 2D numpy array such that data[i] has label labels[i]
+    '''
     npoints = len(data)
     nfeatures = len(data[0])
     numCorrect = 0.0
@@ -188,7 +192,7 @@ def train(data_batches, label_batches):
             # Reuse variales acros GPUs
             tf.get_variable_scope().reuse_variables()
 
-    # TODO(smurching): Fix this.
+    # TODO(smurching): Can't predict using
     # Create a dummy model, fit on one point
     placeholder_X = tflearn.input_data(shape=[None, nfeatures])
     model = build_model(placeholder_X)
@@ -207,7 +211,9 @@ def train(data_batches, label_batches):
     return model
 
 def train_and_eval(filename):
-    # Train a model on the data in the passed-in file
+    '''
+    Train a model on the data in the passed-in file
+    '''
     model = train_from_file(filename)
 
     # As a sanity check, compute error of the returned model on the training set
@@ -216,6 +222,10 @@ def train_and_eval(filename):
     print("Error: %s"%(error(model, data, labels)))
 
 def train_and_eval(nfeatures, nclasses):
+    '''
+    Trains and evaluates a model on synthetic data generated via
+    get_synthetic_data
+    '''
     data, labels = get_synthetic_data(nfeatures, nclasses)
     data_batches, label_batches = split_batches(data, labels)
     model = train(data_batches, label_batches)

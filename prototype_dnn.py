@@ -37,38 +37,41 @@ flags.DEFINE_string(
     "",
     "Path to the training data.")
 
-LABEL_COLUMN = "year"
-# TODO set to appropriate vals
+LABEL_COLUMN = "decade"
 ID_COLUMN = "song_id"
 
 def get_col_names(df):
   return df.columns.tolist()
 
+def get_feature_cols(df):
+  cols = set(get_col_names(df))
+  cols.remove(LABEL_COLUMN)
+  cols.remove(ID_COLUMN)
+  return list(cols)
+
 def build_estimator(model_dir, df):
   """Build an estimator to be fit on the passed-in dataframe"""
 
   # Get columns containing continuous feature values
-  cols = set(get_col_names(df))
-  cols.remove(LABEL_COLUMN)
-  cols.remove(ID_COLUMN)
+  cols = get_feature_cols(df)
 
   # Continuous base columns.
   deep_columns = [tf.contrib.layers.real_valued_column(col) for col in cols]
   m = tf.contrib.learn.DNNClassifier(model_dir=model_dir, feature_columns=deep_columns,
-                                     hidden_units=[100, 50])
+                                     hidden_units=[100, 50], n_classes=3)
   return m
 
 def input_fn(df):
   """Input builder function."""
   # Creates a dictionary mapping from each continuous feature column name (k) to
   # the values of that column stored in a constant Tensor.
-  continuous_cols = {k: tf.constant(df[k].values) for k in get_col_names(df)}
-  feature_cols = dict(continuous_cols)
+  continuous_cols = {k: tf.constant(df[k].values) for k in get_feature_cols(df)}
 
   # Converts the label column into a constant Tensor.
   label = tf.constant(df[LABEL_COLUMN].values)
+
   # Returns the feature columns and the label.
-  return feature_cols, label
+  return continuous_cols, label
 
 def encode_labels(df):
   # Transform year into a 0/1 binary classification label
@@ -77,22 +80,29 @@ def encode_labels(df):
 def train_and_eval():
   """Train and evaluate the model."""
   train_file_name = FLAGS.train_data
-  all_data = pd.read_csv(tf.gfile.Open(train_file_name), engine="python")
+  model_dir = tempfile.mkdtemp() if not FLAGS.model_dir else FLAGS.model_dir
+  train_steps = FLAGS.train_steps
+  return train_eval_helper(train_file_name, model_dir, train_steps)
+
+def train_eval_helper(train_file_name, model_dir, train_steps):
+  all_data = pd.read_csv(train_file_name, engine="python")
+  encode_labels(all_data)
 
   df_train, df_test = train_test_split(all_data, test_size = 0.2)
-  model_dir = tempfile.mkdtemp() if not FLAGS.model_dir else FLAGS.model_dir
   print("model directory = %s" % model_dir)
 
-  m = build_estimator(model_dir)
-  m.fit(input_fn=lambda: input_fn(df_train), steps=FLAGS.train_steps)
+  m = build_estimator(model_dir, df_train)
+  m.fit(input_fn=lambda: input_fn(df_train), steps=train_steps)
   results = m.evaluate(input_fn=lambda: input_fn(df_test), steps=1)
   for key in sorted(results):
     print("%s: %s" % (key, results[key]))
-
+  return m  
 
 def main(_):
-  train_and_eval()
+  return train_and_eval()
 
+def getModel(filename, model_dir="", train_steps=200):
+  return train_eval_helper(filename, model_dir, train_steps)
 
 if __name__ == "__main__":
   tf.app.run()

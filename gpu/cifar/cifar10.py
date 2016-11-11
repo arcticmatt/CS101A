@@ -37,12 +37,14 @@ from __future__ import print_function
 
 import gzip
 import os
+import pandas as pd
 import re
 import sys
 import tarfile
 
 from six.moves import urllib
 import tensorflow as tf
+import tflearn
 
 from tensorflow.models.image.cifar10 import cifar10_input
 
@@ -160,8 +162,26 @@ def distorted_inputs():
     labels = tf.cast(labels, tf.float16)
   return images, labels
 
+def get_data(filename, batch_size):
+    # Read data from CSV, encode label columns
+    df = pd.read_csv(filename)
+    encode_labels(df)
 
-def inputs(eval_data):
+    # Drop ID column, separate data and label cols
+    labels = df[LABEL_COL].as_matrix()
+
+    df.drop([LABEL_COL, ID_COL], axis=1, inplace=True)
+    data = df.as_matrix()
+    return (data, labels)
+
+# Loads an array of training data batches from the passed-in data file
+def split_batches(data, labels):
+    # Split the batch of images and labels for towers.
+    data_splits = np.array_split(data, FLAGS.num_gpus)
+    labels_splits = np.array_split(labels, FLAGS.num_gpus)
+    return (data_splits, labels_splits)
+
+def inputs(filename):
   """Construct input for CIFAR evaluation using the Reader ops.
 
   Args:
@@ -174,6 +194,17 @@ def inputs(eval_data):
   Raises:
     ValueError: If no data_dir
   """
+
+  # TODO(smurching): Refactor
+  data, labels = map(tf.constant, get_data(filename))
+
+  # Add a "channel" dimension of 1 to the data tensor
+  tf.expand_dim(data, -1)
+
+  data_batches = tf.split(split_dim=0, num_split=FLAGS.batch_size, value=data)
+  label_batches = tf.split(split_dim=0, num_split=FLAGS.batch_size, value=data)
+
+
   if not FLAGS.data_dir:
     raise ValueError('Please supply a data_dir')
   data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-bin')
