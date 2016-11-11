@@ -38,7 +38,7 @@ def write_mfcc_data_for_folder(read_file, folder_name):
                 # load in the audio path
                 y, sr = librosa.load(audio_path)
 
-                # For a standard 30s preview, this should give us a 12 x 300 array
+                # For a standard 30s preview, this should give us a NUM_COEFFS x NUM_FRAMES array
                 mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=NUM_COEFFS, hop_length=HOP_LENGTH)
                 mfcc_all = mfcc.flatten()
                 mfcc_str = ','.join(map(str, mfcc_all))

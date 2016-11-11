@@ -5,3 +5,4 @@
 *.csv
 *.fixed
 mp3s/
+.ipynb_checkpoints/
