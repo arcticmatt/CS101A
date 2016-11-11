@@ -47,7 +47,8 @@ import time
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
-from tensorflow.models.image.cifar10 import cifar10
+# from tensorflow.models.image.cifar10 import cifar10
+import cifar10
 
 import cifar_utils
 
@@ -80,6 +81,7 @@ def tower_loss(scope, scope_name):
   """
   # Get images and labels for CIFAR-10.
   images, labels = cifar_utils.inputs(READER, scope_name)
+  labels = tf.constant(labels)
 
   # Build inference Graph.
   logits = cifar10.inference(images)
@@ -103,7 +105,7 @@ def tower_loss(scope, scope_name):
   for l in losses + [total_loss]:
     # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
     # session. This helps the clarity of presentation on tensorboard.
-    loss_name = re.sub('%s_[0-9]*/' % cifar10.TOWER_NAME, '', l.op.name)
+    loss_name = re.sub('%s_[0-9]*/' % cifar_utils.TOWER_NAME, '', l.op.name)
     # Name each loss as '(raw)' and name the moving average version of the loss
     # as the original loss name.
     tf.scalar_summary(loss_name +' (raw)', l)

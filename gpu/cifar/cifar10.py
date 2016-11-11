@@ -41,6 +41,7 @@ import pandas as pd
 import re
 import sys
 import tarfile
+import numpy as np
 import cifar_utils
 
 from six.moves import urllib
@@ -51,18 +52,20 @@ from tensorflow.models.image.cifar10 import cifar10_input
 
 FLAGS = tf.app.flags.FLAGS
 
-# Basic model parameters.
-tf.app.flags.DEFINE_integer('batch_size', 128,
-                            """Number of images to process in a batch.""")
-tf.app.flags.DEFINE_string('data_dir', '/tmp/cifar10_data',
-                           """Path to the CIFAR-10 data directory.""")
-tf.app.flags.DEFINE_boolean('use_fp16', False,
-                            """Train the model using fp16.""")
+# # Basic model parameters.
+# tf.app.flags.DEFINE_integer('batch_size', 128,
+#                             """Number of images to process in a batch.""")
+# tf.app.flags.DEFINE_string('data_dir', '/tmp/cifar10_data',
+#                            """Path to the CIFAR-10 data directory.""")
+# tf.app.flags.DEFINE_boolean('use_fp16', False,
+#                             """Train the model using fp16.""")
 
 # Global constants describing the CIFAR-10 data set.
 # TODO: Replace these
 IMAGE_SIZE = cifar10_input.IMAGE_SIZE
-NUM_CLASSES = cifar10_input.NUM_CLASSES
+
+# TODO(smurching): Change to # of multiclass classes
+NUM_CLASSES = 2
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = cifar10_input.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = cifar10_input.NUM_EXAMPLES_PER_EPOCH_FOR_EVAL
 
@@ -217,10 +220,15 @@ def inference(images):
 
   Args:
     images: Images returned from distorted_inputs() or inputs().
+    NOTE: Numpy array, not a tf constant.
 
   Returns:
     Logits.
+
   """
+  print("inference: Building inference graph")
+  batch_size, nsamples, ncoeffs, _ = np.shape(images)
+  images = tf.constant(images, tf.float32)
   # We instantiate all variables using tf.get_variable() instead of
   # tf.Variable() in order to share variables across multiple GPU training runs.
   # If we only ran this model on a single GPU, we could simplify this function
@@ -229,7 +237,7 @@ def inference(images):
   # conv1
   with tf.variable_scope('conv1') as scope:
     kernel = _variable_with_weight_decay('weights',
-                                         shape=[cifar_utils.NCOEFFS, cifar_utils.NSAMPLES, 1, 64],
+                                         shape=[5, 5, 1, 64],
                                          stddev=5e-2,
                                          wd=0.0)
     conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
@@ -267,7 +275,7 @@ def inference(images):
   # local3
   with tf.variable_scope('local3') as scope:
     # Move everything into depth so we can perform a single matrix multiply.
-    reshape = tf.reshape(pool2, [FLAGS.batch_size, -1])
+    reshape = tf.reshape(pool2, [batch_size, -1])
     dim = reshape.get_shape()[1].value
     weights = _variable_with_weight_decay('weights', shape=[dim, 384],
                                           stddev=0.04, wd=0.004)
@@ -295,6 +303,7 @@ def inference(images):
     softmax_linear = tf.add(tf.matmul(local4, weights), biases, name=scope.name)
     _activation_summary(softmax_linear)
 
+  print("inference: done")
   return softmax_linear
 
 

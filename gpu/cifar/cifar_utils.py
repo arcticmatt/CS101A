@@ -1,7 +1,8 @@
 import cifar_utils
 import os
 import sys
-import tensorflow as tf
+import numpy as np
+import time
 
 # Hard-coded label/id columns
 LABEL_COL = "decade"
@@ -78,6 +79,7 @@ class BatchReader:
         return self.batch_idx * batch_idx
 
     def get_batch(self, scope):
+        start = time.time()
         # Get offset of next batch for current tower
         next_batch_offset = self.offsets[scope]
 
@@ -90,7 +92,8 @@ class BatchReader:
         # Update reader (increment batch offset for current tower)
         num_batches_for_tower = len(self.assignments[scope])
         self.offsets[scope] = (self.offsets[scope] + 1) % num_batches_for_tower
-
+        end = time.time()
+        print("Got batch of size %s in time %s"%(len(batch[0]), end - start))
         return batch
 
 class SongFeatureExtractor:
@@ -117,7 +120,7 @@ class SongFeatureExtractor:
         return result
 
     def encode_label(self, label):
-        if label > 1980:
+        if int(label) > 1980:
             return 1
         return 0
 
@@ -145,9 +148,7 @@ def inputs(reader, scope):
 
   data, labels = reader.get_batch(scope)
   batch_size = len(data)
-  data, labels = (tf.constant(data), tf.constant(labels))
-  print(data.get_shape())
-  data = tf.reshape(data, [batch_size, NSAMPLES, NCOEFFS, 1])
+  data = np.reshape(data, [batch_size, NSAMPLES, NCOEFFS, 1])
   return data, labels
 
 
