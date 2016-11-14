@@ -8,8 +8,10 @@ LABEL_COL = "decade"
 ID_COL = "song_id"
 CSV_DELIM = ","
 
-NCOEFFS = 42
-NSAMPLES = 86
+NCOEFFS = 100
+NSAMPLES = 1324
+NFEATURES = 132400
+
 
 # If a model is trained with multiple GPUs, prefix all Op names with tower_name
 # to differentiate the operations. Note that this prefix is removed from the
@@ -106,8 +108,10 @@ class SongFeatureExtractor:
         Sets schema of feature extractor given a filename
         '''
         with open(filename) as f: 
-            header = f.readline()
-            self.col_names = header.split(CSV_DELIM)
+            # TODO(smurching): Remove hard-coded header
+            # header = f.readline()
+            # self.col_names = header.split(CSV_DELIM)
+            self.col_names = [LABEL_COL] + map(str, range(NFEATURES)) + [ID_COL]
             self.schema = {self.col_names[i] : i for i in xrange(len(self.col_names))}
 
     def drop(self, vals, *cols):

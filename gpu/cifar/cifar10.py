@@ -46,7 +46,6 @@ import train_utils
 
 from six.moves import urllib
 import tensorflow as tf
-import tflearn
 
 from tensorflow.models.image.cifar10 import cifar10_input
 
