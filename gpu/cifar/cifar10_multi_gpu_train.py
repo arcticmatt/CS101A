@@ -50,7 +50,7 @@ import tensorflow as tf
 # from tensorflow.models.image.cifar10 import cifar10
 import cifar10
 
-import cifar_utils
+import train_utils
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -66,9 +66,9 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False,
 
 tf.app.flags.DEFINE_string('train_data', None, 'Training data CSV')
 
-READER = cifar_utils.BatchReader(num_devices=FLAGS.num_gpus,
-  filename=FLAGS.train_data, batch_size=int(1e7),
-  line_processor=cifar_utils.SongFeatureExtractor())
+READER = train_utils.BatchReader(num_devices=FLAGS.num_gpus,
+  filename=FLAGS.train_data, batch_size=int(1e3),
+  line_processor=train_utils.SongFeatureExtractor())
 
 def tower_loss(scope, scope_name):
   """Calculate the total loss on a single tower running the CIFAR model.
@@ -80,7 +80,7 @@ def tower_loss(scope, scope_name):
      Tensor of shape [] containing the total loss for a batch of data
   """
   # Get images and labels for CIFAR-10.
-  images, labels = cifar_utils.inputs(READER, scope_name)
+  images, labels = train_utils.inputs(READER, scope_name)
   labels = tf.constant(labels)
 
   # Build inference Graph.
@@ -105,7 +105,7 @@ def tower_loss(scope, scope_name):
   for l in losses + [total_loss]:
     # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
     # session. This helps the clarity of presentation on tensorboard.
-    loss_name = re.sub('%s_[0-9]*/' % cifar_utils.TOWER_NAME, '', l.op.name)
+    loss_name = re.sub('%s_[0-9]*/' % train_utils.TOWER_NAME, '', l.op.name)
     # Name each loss as '(raw)' and name the moving average version of the loss
     # as the original loss name.
     tf.scalar_summary(loss_name +' (raw)', l)
@@ -163,6 +163,7 @@ def train():
         initializer=tf.constant_initializer(0), trainable=False)
 
     # Calculate the learning rate schedule.
+    # TODO(smurching): Update this?
     num_batches_per_epoch = (cifar10.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
                              FLAGS.batch_size)
     decay_steps = int(num_batches_per_epoch * cifar10.NUM_EPOCHS_PER_DECAY)
@@ -181,7 +182,7 @@ def train():
     tower_grads = []
     for i in xrange(FLAGS.num_gpus):
       with tf.device('/gpu:%d' % i):
-        scope_name = cifar_utils.get_scope_name(i)
+        scope_name = train_utils.get_scope_name(i)
         with tf.name_scope(scope_name) as scope:
           # Calculate the loss for one tower of the CIFAR model. This function
           # constructs the entire CIFAR model but shares the variables across

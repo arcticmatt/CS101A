@@ -6,6 +6,7 @@ import sys
 LABEL_COL = "decade"
 ID_COL = "song_id"
 CSV_DELIM = ","
+NUM_COLS = 132400
 
 class BatchReader:
     '''
@@ -87,8 +88,10 @@ class SongFeatureExtractor:
         Sets schema of feature extractor given a filename
         '''
         with open(filename) as f: 
-            header = f.readline()
-            col_names = header.split(CSV_DELIM)
+            # TODO(smurching): Replace hard-coded header with code below
+            # header = f.readline()
+            # col_names = header.split(CSV_DELIM)
+            col_names = [LABEL_COL] + map(str, range(NUM_COLS)) + [ID_COL]
             self.schema = {col_names[i] : i for i in xrange(len(col_names))}
 
     def drop(self, vals, *cols):

@@ -233,7 +233,6 @@ def train_and_eval(nfeatures, nclasses):
     print("Error: %s"%(error(model, data, labels)))
 
 
-
 # Model can now be trained by multiple GPUs (see gradient averaging)
 
 if __name__ == "__main__":

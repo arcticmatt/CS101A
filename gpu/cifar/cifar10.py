@@ -42,7 +42,7 @@ import re
 import sys
 import tarfile
 import numpy as np
-import cifar_utils
+import train_utils
 
 from six.moves import urllib
 import tensorflow as tf
@@ -91,7 +91,7 @@ def _activation_summary(x):
   """
   # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
   # session. This helps the clarity of presentation on tensorboard.
-  tensor_name = re.sub('%s_[0-9]*/' % cifar_utils.TOWER_NAME, '', x.op.name)
+  tensor_name = re.sub('%s_[0-9]*/' % train_utils.TOWER_NAME, '', x.op.name)
   tf.histogram_summary(tensor_name + '/activations', x)
   tf.scalar_summary(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
 
@@ -227,7 +227,7 @@ def inference(images):
 
   """
   print("inference: Building inference graph")
-  batch_size, nsamples, ncoeffs, _ = np.shape(images)
+  batch_size, ncoeffs, nsamples, _ = np.shape(images)
   images = tf.constant(images, tf.float32)
   # We instantiate all variables using tf.get_variable() instead of
   # tf.Variable() in order to share variables across multiple GPU training runs.

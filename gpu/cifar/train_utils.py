@@ -148,7 +148,7 @@ def inputs(reader, scope):
 
   data, labels = reader.get_batch(scope)
   batch_size = len(data)
-  data = np.reshape(data, [batch_size, NSAMPLES, NCOEFFS, 1])
+  data = np.reshape(data, [batch_size, NCOEFFS, NSAMPLES, 1])
   return data, labels
 
 
