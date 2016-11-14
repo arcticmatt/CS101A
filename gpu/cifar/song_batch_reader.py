@@ -1,4 +1,4 @@
-import cifar_utils
+import train_utils
 import os
 import sys
 
@@ -24,13 +24,13 @@ class BatchReader:
         # Assign batches to each device
         num_batches = (self.filesize + self.batch_size - 1) / self.batch_size
 
-        self.assignments = {cifar_utils.get_scope_name(i): [] for i in xrange(num_devices)}
-        self.offsets = {cifar_utils.get_scope_name(i) : 0 for i in xrange(num_devices)}
+        self.assignments = {train_utils.get_scope_name(i): [] for i in xrange(num_devices)}
+        self.offsets = {train_utils.get_scope_name(i) : 0 for i in xrange(num_devices)}
 
         # Assign each batch to a device
         for i in xrange(num_batches):
             device_idx = i % num_devices
-            scope = cifar_utils.get_scope_name(device_idx)
+            scope = train_utils.get_scope_name(device_idx)
             self.assignments[scope].append(i)
 
     def read_batch(self, batch_idx):
