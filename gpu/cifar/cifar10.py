@@ -139,82 +139,6 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
     tf.add_to_collection('losses', weight_decay)
   return var
 
-
-def distorted_inputs():
-  """Construct distorted input for CIFAR training using the Reader ops.
-
-  Returns:
-    images: Images. 4D tensor of [batch_size, IMAGE_SIZE, IMAGE_SIZE, 3] size.
-    labels: Labels. 1D tensor of [batch_size] size.
-
-  Raises:
-    ValueError: If no data_dir
-  """
-  if not FLAGS.data_dir:
-    raise ValueError('Please supply a data_dir')
-  data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-bin')
-  images, labels = cifar10_input.distorted_inputs(data_dir=data_dir,
-                                                  batch_size=FLAGS.batch_size)
-  if FLAGS.use_fp16:
-    images = tf.cast(images, tf.float16)
-    labels = tf.cast(labels, tf.float16)
-  return images, labels
-
-def get_data(filename, batch_size):
-    # Read data from CSV, encode label columns
-    df = pd.read_csv(filename)
-    encode_labels(df)
-
-    # Drop ID column, separate data and label cols
-    labels = df[LABEL_COL].as_matrix()
-
-    df.drop([LABEL_COL, ID_COL], axis=1, inplace=True)
-    data = df.as_matrix()
-    return (data, labels)
-
-# Loads an array of training data batches from the passed-in data file
-def split_batches(data, labels):
-    # Split the batch of images and labels for towers.
-    data_splits = np.array_split(data, FLAGS.num_gpus)
-    labels_splits = np.array_split(labels, FLAGS.num_gpus)
-    return (data_splits, labels_splits)
-
-def inputs(filename):
-  """Construct input for CIFAR evaluation using the Reader ops.
-
-  Args:
-    eval_data: bool, indicating if one should use the train or eval data set.
-
-  Returns:
-    images: Images. 4D tensor of [batch_size, IMAGE_SIZE, IMAGE_SIZE, 3] size.
-    labels: Labels. 1D tensor of [batch_size] size.
-
-  Raises:
-    ValueError: If no data_dir
-  """
-
-  # TODO(smurching): Refactor
-  data, labels = map(tf.constant, get_data(filename))
-
-  # Add a "channel" dimension of 1 to the data tensor
-  data = tf.expand_dims(data, -1)
-
-  data_batches = tf.split(split_dim=0, num_split=FLAGS.batch_size, value=data)
-  label_batches = tf.split(split_dim=0, num_split=FLAGS.batch_size, value=data)
-
-
-  if not FLAGS.data_dir:
-    raise ValueError('Please supply a data_dir')
-  data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-bin')
-  images, labels = cifar10_input.inputs(eval_data=eval_data,
-                                        data_dir=data_dir,
-                                        batch_size=FLAGS.batch_size)
-  if FLAGS.use_fp16:
-    images = tf.cast(images, tf.float16)
-    labels = tf.cast(labels, tf.float16)
-  return images, labels
-
-
 def inference(images):
   """Build the CIFAR-10 model.
 
@@ -227,8 +151,6 @@ def inference(images):
 
   """
   print("inference: Building inference graph")
-  batch_size, ncoeffs, nsamples, _ = np.shape(images)
-  images = tf.constant(images, tf.float32)
   # We instantiate all variables using tf.get_variable() instead of
   # tf.Variable() in order to share variables across multiple GPU training runs.
   # If we only ran this model on a single GPU, we could simplify this function
@@ -275,7 +197,7 @@ def inference(images):
   # local3
   with tf.variable_scope('local3') as scope:
     # Move everything into depth so we can perform a single matrix multiply.
-    reshape = tf.reshape(pool2, [batch_size, -1])
+    reshape = tf.reshape(pool2, [FLAGS.batch_size, -1])
     dim = reshape.get_shape()[1].value
     weights = _variable_with_weight_decay('weights', shape=[dim, 384],
                                           stddev=0.04, wd=0.004)
@@ -412,23 +334,4 @@ def train(total_loss, global_step):
     train_op = tf.no_op(name='train')
 
   return train_op
-
-
-def maybe_download_and_extract():
-  """Download and extract the tarball from Alex's website."""
-  dest_directory = FLAGS.data_dir
-  if not os.path.exists(dest_directory):
-    os.makedirs(dest_directory)
-  filename = DATA_URL.split('/')[-1]
-  filepath = os.path.join(dest_directory, filename)
-  if not os.path.exists(filepath):
-    def _progress(count, block_size, total_size):
-      sys.stdout.write('\r>> Downloading %s %.1f%%' % (filename,
-          float(count * block_size) / float(total_size) * 100.0))
-      sys.stdout.flush()
-    filepath, _ = urllib.request.urlretrieve(DATA_URL, filepath, _progress)
-    print()
-    statinfo = os.stat(filepath)
-    print('Successfully downloaded', filename, statinfo.st_size, 'bytes.')
   
-  tarfile.open(filepath, 'r:gz').extractall(dest_directory)
