@@ -80,6 +80,7 @@ def tower_loss(scope, scope_name):
      Tensor of shape [] containing the total loss for a batch of data
   """
   # Get images and labels for CIFAR-10.
+  print("In tower loss")
   images, labels = train_utils.inputs(READER, scope_name)
   labels = tf.constant(labels)
 
