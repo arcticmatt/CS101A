@@ -65,20 +65,17 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
 
 # TODO(smurching): Assert this while reading training examples
-tf.app.flags.DEFINE_integer('num_features', 3612, 
-                            """Number of features in training data""")
-
-tf.app.flags.DEFINE_integer('num_subsamples', 42, 
+tf.app.flags.DEFINE_integer('num_subsamples', 1324, 
                             """Number of sampled values for each MFCC coefficient""")
 
-tf.app.flags.DEFINE_integer('num_coeffs', 86, 
+tf.app.flags.DEFINE_integer('num_coeffs', 100, 
                             """Number of MFCC coefficients""")
 
 tf.app.flags.DEFINE_string('train_data', None, 'Training data CSV')
 
 READER = train_utils.BatchReader(filename=FLAGS.train_data,
   batch_size=FLAGS.batch_size, line_processor=train_utils.SongFeatureExtractor(),
-  num_features=FLAGS.num_features)
+  num_features=FLAGS.num_subsamples * FLAGS.num_coeffs)
 
 def tower_loss(scope, images, labels):
   """Calculate the total loss on a single tower running the CIFAR model.
