@@ -10,6 +10,7 @@ FLAGS = tf.app.flags.FLAGS
 LABEL_COL = "decade"
 ID_COL = "song_id"
 CSV_DELIM = ","
+NFEATURES = 132400
 
 # If a model is trained with multiple GPUs, prefix all Op names with tower_name
 # to differentiate the operations. Note that this prefix is removed from the
@@ -78,8 +79,9 @@ class SongFeatureExtractor:
         '''
         with open(filename) as f: 
             # TODO(smurching): Change to be compatible with our corrupt training data header
-            header = f.readline()
-            self.col_names = header.split(CSV_DELIM)
+            # header = f.readline()
+            # self.col_names = header.split(CSV_DELIM)
+            self.col_names = [LABEL_COL] + map(str, range(NFEATURES)) + [ID_COL]
             self.schema = {self.col_names[i] : i for i in xrange(len(self.col_names))}
 
     def drop(self, vals, *cols):
@@ -91,9 +93,11 @@ class SongFeatureExtractor:
         return result
 
     def encode_label(self, label):
-        if int(label) > 1980:
-            return 1.0
-        return 0.0
+        # if int(label) > 1980:
+        #     return 1.0
+        # return 0.0
+        # From label (3rd char of year), subtract 6 (starting decade = 1960)
+        return int(label) - 6
 
     def process(self, line):
         assert(self.schema is not None)
