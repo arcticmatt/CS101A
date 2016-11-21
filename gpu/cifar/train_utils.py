@@ -3,15 +3,14 @@ import sys
 import numpy as np
 import time
 
+import tensorflow as tf
+FLAGS = tf.app.flags.FLAGS
+
 # Hard-coded label/id columns
 LABEL_COL = "decade"
 ID_COL = "song_id"
 CSV_DELIM = ","
-
-NCOEFFS = 100
-NSAMPLES = 1324
 NFEATURES = 132400
-
 
 # If a model is trained with multiple GPUs, prefix all Op names with tower_name
 # to differentiate the operations. Note that this prefix is removed from the
@@ -26,76 +25,47 @@ def get_scope_name(tower_idx):
 
 class BatchReader:
     '''
-    Reads blocks of roughly <batch_size> bytes from the passed-in file.
+    Reads batches of <batch_size> lines from the passed-in file.
     '''
-    def __init__(self, num_devices, filename, batch_size, line_processor):
-        self.filename = filename
-        self.filesize = os.path.getsize(filename) 
+    def __init__(self, filename, batch_size, line_processor, num_features):
         self.batch_size = batch_size
         self.line_processor = line_processor
+        self.num_features = num_features
 
         # Set schema of processor
-        line_processor.set_schema(filename)
+        self.line_processor.set_schema(filename)
+        assert(len(self.line_processor.schema) == num_features + 2)
 
-        # Assign batches to each device
-        num_batches = (self.filesize + self.batch_size - 1) / self.batch_size
+        # Initialize file handle
+        self.handle = open(filename)
+        self.reset_handle()
 
-        self.assignments = {get_scope_name(i): [] for i in xrange(num_devices)}
-        self.offsets = {get_scope_name(i) : 0 for i in xrange(num_devices)}
+    def reset_handle(self):
+        '''
+        Resets file handle to training data file.
+        '''
+        self.handle.seek(0)
+        # Skip past header
+        self.handle.readline()
 
-        # Assign each batch to a device
-        for i in xrange(num_batches):
-            device_idx = i % num_devices
-            scope = get_scope_name(device_idx)
-            self.assignments[scope].append(i)
+    def getline(self):
+        line = self.handle.readline()
+        if len(line) > 0:
+            return line
+        self.reset_handle()
+        return self.handle.readline()
 
-    def read_batch(self, batch_idx):
-        with open(self.filename) as f:
-            # Seek to the starting offset of our batch
-            f.seek(batch_idx * self.batch_size)
-            # Read to the end of the next line. Note that we might skip
-            # over the first line of our batch (if we've seeked to the exact start
-            # of a CSV line). This (feature not a bug lol) lets us skip the header line of 
-            # the CSV.
-            data = []
-            labels = []
-            line = f.readline()
-            bytes_read = 0
-            old_size = 0
-            while bytes_read < self.batch_size:
-                line = f.readline()
-                if len(line) == 0:
-                    break
-                features, label = self.line_processor.process(line)
-                data.append(features)
-                labels.append(label)
+    def get_batch(self):
+        data = []
+        labels = []
+        # Get <batch_size> lines, splitting each one into a tuple of (features, label)        
+        for i in xrange(self.batch_size):
+            features, label = self.line_processor.process(self.getline())
+            assert(len(features) == self.num_features)
+            data.append(features)
+            labels.append(label)
+        return (data, labels)
 
-                new_size = sys.getsizeof(data) + sys.getsizeof(labels)
-                bytes_read += (new_size - old_size)
-                old_size = new_size
-
-            return (data, labels)
-
-    def get_offset(self, batch_idx):
-        return self.batch_idx * batch_idx
-
-    def get_batch(self, scope):
-        start = time.time()
-        # Get offset of next batch for current tower
-        next_batch_offset = self.offsets[scope]
-
-        # Look up index of next batch
-        batch_idx = self.assignments[scope][next_batch_offset] 
-
-        # Read the batch
-        batch = self.read_batch(batch_idx)
-
-        # Update reader (increment batch offset for current tower)
-        num_batches_for_tower = len(self.assignments[scope])
-        self.offsets[scope] = (self.offsets[scope] + 1) % num_batches_for_tower
-        end = time.time()
-        print("Got batch of size %s in time %s"%(len(batch[0]), end - start))
-        return batch
 
 class SongFeatureExtractor:
     def __init__(self, id_col=ID_COL, label_col=LABEL_COL):
@@ -123,9 +93,11 @@ class SongFeatureExtractor:
         return result
 
     def encode_label(self, label):
-        if int(label) > 1980:
-            return 1
-        return 0
+        # if int(label) > 1980:
+        #     return 1.0
+        # return 0.0
+        # From label (3rd char of year), subtract 6 (starting decade = 1960)
+        return int(label) - 6
 
     def process(self, line):
         assert(self.schema is not None)
@@ -135,7 +107,7 @@ class SongFeatureExtractor:
         label = self.encode_label(vals[label_idx])
         return (features, label)
 
-def inputs(reader, scope):
+def inputs(reader):
   """Construct input for CIFAR evaluation using the Reader ops.
 
   Args:
@@ -148,19 +120,8 @@ def inputs(reader, scope):
   Raises:
     ValueError: If no data_dir
   """
-
-  data, labels = reader.get_batch(scope)
+  print("In inputs()")
+  data, labels = reader.get_batch()
   batch_size = len(data)
-  data = np.reshape(data, [batch_size, NCOEFFS, NSAMPLES, 1])
-  return data, labels
-
-
-if __name__ == "__main__":
-    path = sys.argv[1]
-    num_devices = int(sys.argv[2])
-
-    processor = SongFeatureExtractor()
-    reader = BatchReader(num_devices=num_devices, filename=path, batch_size=int(1e7), line_processor=processor)
-    print reader.assignments
-    print reader.offsets
-
+  data = np.float32(np.reshape(data, [batch_size, FLAGS.num_coeffs, FLAGS.num_subsamples, 1]))
+  return (data, np.float32(labels))

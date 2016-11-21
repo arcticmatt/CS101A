@@ -64,13 +64,23 @@ tf.app.flags.DEFINE_integer('num_gpus', 1,
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
 
+# TODO(smurching): Assert this while reading training examples
+tf.app.flags.DEFINE_integer('num_features', 3612, 
+                            """Number of features in training data""")
+
+tf.app.flags.DEFINE_integer('num_subsamples', 42, 
+                            """Number of sampled values for each MFCC coefficient""")
+
+tf.app.flags.DEFINE_integer('num_coeffs', 86, 
+                            """Number of MFCC coefficients""")
+
 tf.app.flags.DEFINE_string('train_data', None, 'Training data CSV')
 
-READER = train_utils.BatchReader(num_devices=FLAGS.num_gpus,
-  filename=FLAGS.train_data, batch_size=int(1e3),
-  line_processor=train_utils.SongFeatureExtractor())
+READER = train_utils.BatchReader(filename=FLAGS.train_data,
+  batch_size=FLAGS.batch_size, line_processor=train_utils.SongFeatureExtractor(),
+  num_features=FLAGS.num_features)
 
-def tower_loss(scope, scope_name):
+def tower_loss(scope, images, labels):
   """Calculate the total loss on a single tower running the CIFAR model.
 
   Args:
@@ -79,9 +89,6 @@ def tower_loss(scope, scope_name):
   Returns:
      Tensor of shape [] containing the total loss for a batch of data
   """
-  # Get images and labels for CIFAR-10.
-  images, labels = train_utils.inputs(READER, scope_name)
-  labels = tf.constant(labels)
 
   # Build inference Graph.
   logits = cifar10.inference(images)
@@ -153,6 +160,14 @@ def average_gradients(tower_grads):
   return average_grads
 
 
+def fill_feed_dict(placeholder_dict):
+  result = {}
+  for features_placeholder, labels_placeholder in placeholder_dict.values():
+    features, labels = train_utils.inputs(READER)
+    result[features_placeholder] = features
+    result[labels_placeholder] = labels
+  return result
+
 def train():
   """Train CIFAR-10 for a number of steps."""
   with tf.Graph().as_default(), tf.device('/cpu:0'):
@@ -178,16 +193,31 @@ def train():
     # Create an optimizer that performs gradient descent.
     opt = tf.train.GradientDescentOptimizer(lr)
 
+
+    # Set up dict mapping GPU scopes to placeholders
+    placeholder_dict = {}
+    for i in xrange(FLAGS.num_gpus):
+      features_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size, 
+        FLAGS.num_coeffs, FLAGS.num_subsamples, 1])
+      label_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size,])
+      scope_name = train_utils.get_scope_name(i)
+      placeholder_dict[scope_name] = (features_placeholder, label_placeholder)
+
+
     # Calculate the gradients for each model tower.
     tower_grads = []
     for i in xrange(FLAGS.num_gpus):
       with tf.device('/gpu:%d' % i):
         scope_name = train_utils.get_scope_name(i)
         with tf.name_scope(scope_name) as scope:
+
+          # Look up placeholder images, labels for current device
+          image, labels = placeholder_dict[scope_name]
+
           # Calculate the loss for one tower of the CIFAR model. This function
           # constructs the entire CIFAR model but shares the variables across
           # all towers.
-          loss = tower_loss(scope, scope_name)
+          loss = tower_loss(scope, image, labels)
 
           # Reuse variables for the next tower.
           tf.get_variable_scope().reuse_variables()
@@ -252,13 +282,17 @@ def train():
     summary_writer = tf.train.SummaryWriter(FLAGS.train_dir, sess.graph)
 
     for step in xrange(FLAGS.max_steps):
+
+      # Map each placeholder in placeholder_dict to a new batch of data
+      feed_dict = fill_feed_dict(placeholder_dict)
+
       start_time = time.time()
-      _, loss_value = sess.run([train_op, loss])
+      _, loss_value = sess.run([train_op, loss], feed_dict=feed_dict)
       duration = time.time() - start_time
 
       assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
-      if step % 10 == 0:
+      if step % 1 == 0:
         num_examples_per_step = FLAGS.batch_size * FLAGS.num_gpus
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration / FLAGS.num_gpus
@@ -269,14 +303,13 @@ def train():
                              examples_per_sec, sec_per_batch))
 
       if step % 100 == 0:
-        summary_str = sess.run(summary_op)
+        summary_str = sess.run(summary_op, feed_dict=feed_dict)
         summary_writer.add_summary(summary_str, step)
 
       # Save the model checkpoint periodically.
       if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
         checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
-
 
 def main(argv=None):  # pylint: disable=unused-argument
   if tf.gfile.Exists(FLAGS.train_dir):
