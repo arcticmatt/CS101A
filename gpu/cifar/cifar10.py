@@ -46,6 +46,7 @@ import train_utils
 
 from six.moves import urllib
 import tensorflow as tf
+import tflearn
 
 from tensorflow.models.image.cifar10 import cifar10_input
 
@@ -73,7 +74,7 @@ NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = cifar10_input.NUM_EXAMPLES_PER_EPOCH_FOR_EVAL
 MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
 NUM_EPOCHS_PER_DECAY = 350.0      # Epochs after which learning rate decays.
 LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
-INITIAL_LEARNING_RATE = 0.05       # Initial learning rate.
+INITIAL_LEARNING_RATE = 0.001       # Initial learning rate.
 
 def _activation_summary(x):
   """Helper to create summaries for activations.
@@ -136,6 +137,61 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
     tf.add_to_collection('losses', weight_decay)
   return var
 
+def build_conv_layers(input_tensor, num_layers, filter_size=None):
+  '''
+  Returns a tensor corresponding to <num_layers> connected convolutional layers 
+  with max pooling between layers. The first convolutional layer takes 
+  input_tensor as its input.
+
+  filter_size: shape (along the [num_subsamples, num_coeffs] axes) of filter
+  '''
+
+  # Set filter size to a default if none is specified
+  if filter_size is None:
+    filter_size = [2, 2]
+
+  final_layer = input_tensor
+  for i in xrange(num_layers):
+    # Expects input tensor [batch_size, height, width, in_channels]
+    # These dimensions correspond to [batch_size, num_subsamples, num_coeffs, 1] in our case
+    with tf.variable_scope('conv_%d'%(i + 1)) as scope:
+      conv = tflearn.layers.conv.conv_2d (final_layer, nb_filter=1, filter_size=filter_size, strides=1,
+        padding='same', activation='linear', bias=True, weights_init='uniform_scaling',
+        bias_init='zeros', regularizer=None, weight_decay=0.001,
+        restore=True, reuse=False, scope=scope)
+
+    # TODO(smurching): Intelligently pick values for the kernel size/stride here
+    final_layer = tflearn.layers.conv.max_pool_2d (conv, kernel_size=[1, 3, 3, 1],
+      strides=[1, 2, 2, 1], padding='same', name='MaxPool2D_%d'%i)
+  return final_layer
+
+def build_recurrent_layers(input_tensor, num_layers, units_per_layer=3, activation='sigmoid', dropout=0.8):
+  final_layer = input_tensor
+  for i in xrange(num_layers):
+    is_last_layer = (i == num_layers - 1)
+    if is_last_layer:
+      # We don't apply softmax for the last layer because 
+      # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits 
+      # and performs the softmax internally for efficiency.      
+      curr_activation = 'linear'      
+    else:
+      curr_activation = activation      
+
+    with tf.variable_scope('recurrent_%d'%(i + 1)) as scope:
+      # TODO(smurching): Pick dropout probability more intelligently, currently just a random guess
+      print("Recurrent layer %s with activation %s has input dim %s"%(i, curr_activation,
+        final_layer.get_shape()))
+      # Get output of recurrent layer as a <timesteps>-length list of prediction tensors of shape
+      # [batch_size, num_units] if this isn't our final recurrent layer. Otherwise, just get a single 2D
+      # output tensor of shape [batch_size, num_units]
+      final_layer = tflearn.layers.recurrent.gru(final_layer, n_units=units_per_layer, scope=scope,
+        reuse=False, activation=curr_activation, dropout=dropout, return_seq=(not is_last_layer))
+      if not is_last_layer:
+        final_layer = tf.pack(final_layer, axis=1)
+      
+  return final_layer
+
+
 def inference(images):
   """Build the CIFAR-10 model.
 
@@ -147,103 +203,18 @@ def inference(images):
     Logits.
 
   """
-  print("inference: Building inference graph")
   # We instantiate all variables using tf.get_variable() instead of
   # tf.Variable() in order to share variables across multiple GPU training runs.
   # If we only ran this model on a single GPU, we could simplify this function
   # by replacing all instances of tf.get_variable() with tf.Variable().
   #
-  # conv1
-  with tf.variable_scope('conv1') as scope:
-    kernel = _variable_with_weight_decay('weights',
-                                         shape=[5, 5, 1, 64],
-                                         stddev=5e-2,
-                                         wd=0.0)
-    conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
-    biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.0))
-    bias = tf.nn.bias_add(conv, biases)
-    conv1 = tf.nn.relu(bias, name=scope.name)
-    _activation_summary(conv1)
 
-  # pool1
-  pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
-                         padding='SAME', name='pool1')
-  # norm1
-  norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
-                    name='norm1')
+  convolutional_layers = build_conv_layers(images, num_layers=5, filter_size=[3, 10])
+  conv_reshaped = tf.squeeze(convolutional_layers, squeeze_dims=[3])
+  print("RNN input shape (batch_size x timesteps x num_coeffs): %s"%conv_reshaped.get_shape())
 
-  # conv2
-  with tf.variable_scope('conv2') as scope:
-    kernel = _variable_with_weight_decay('weights',
-                                         shape=[5, 10, 64, 64],
-                                         stddev=5e-2,
-                                         wd=0.0)
-    conv = tf.nn.conv2d(norm1, kernel, [1, 1, 1, 1], padding='SAME')
-    biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.1))
-    bias = tf.nn.bias_add(conv, biases)
-    conv2 = tf.nn.relu(bias, name=scope.name)
-    _activation_summary(conv2)
-
-  # norm2
-  norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
-                    name='norm2')
-  # pool2
-  pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1],
-                         strides=[1, 2, 2, 1], padding='SAME', name='pool2')
-
-  # conv3
-  with tf.variable_scope('conv3') as scope:
-    kernel = _variable_with_weight_decay('weights',
-                                         shape=[5, 10, 64, 64],
-                                         stddev=5e-2,
-                                         wd=0.0)
-    conv = tf.nn.conv2d(norm2, kernel, [1, 1, 1, 1], padding='SAME')
-    biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.1))
-    bias = tf.nn.bias_add(conv, biases)
-    conv3 = tf.nn.relu(bias, name=scope.name)
-    _activation_summary(conv3)
-
-  # norm2
-  norm3 = tf.nn.lrn(conv3, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
-                    name='norm3')
-  # pool3
-  pool3 = tf.nn.max_pool(norm3, ksize=[1, 3, 3, 1],
-                         strides=[1, 2, 2, 1], padding='SAME', name='pool3')
-
-  # local4
-  with tf.variable_scope('local4') as scope:
-    # Move everything into depth so we can perform a single matrix multiply.
-    reshape = tf.reshape(pool3, [FLAGS.batch_size, -1])
-    dim = reshape.get_shape()[1].value
-    weights = _variable_with_weight_decay('weights', shape=[dim, 384],
-                                          stddev=0.04, wd=0.004)
-    biases = _variable_on_cpu('biases', [384], tf.constant_initializer(0.1))
-    local4 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name=scope.name)
-    _activation_summary(local4)
-
-  # local5
-  with tf.variable_scope('local5') as scope:
-    weights = _variable_with_weight_decay('weights', shape=[384, 192],
-                                          stddev=0.04, wd=0.004)
-    biases = _variable_on_cpu('biases', [192], tf.constant_initializer(0.1))
-    local5 = tf.nn.relu(tf.matmul(local4, weights) + biases, name=scope.name)
-    _activation_summary(local5)
-
-  # linear layer(WX + b),
-  # We don't apply softmax here because 
-  # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits 
-  # and performs the softmax internally for efficiency.
-  with tf.variable_scope('softmax_linear') as scope:
-    weights = _variable_with_weight_decay('weights', [192, NUM_CLASSES],
-                                          stddev=1/192.0, wd=0.0)
-    biases = _variable_on_cpu('biases', [NUM_CLASSES],
-                              tf.constant_initializer(0.0))
-    softmax_linear = tf.add(tf.matmul(local5, weights), biases, name=scope.name)
-    _activation_summary(softmax_linear)
-
-  print("inference: done")
-  return softmax_linear
-
+  return build_recurrent_layers(conv_reshaped, num_layers=2,
+    units_per_layer=30, activation='sigmoid')
 
 def loss(logits, labels):
   """Add L2Loss to all the trainable variables.
@@ -259,6 +230,8 @@ def loss(logits, labels):
   """
   # Calculate the average cross entropy loss across the batch.
   labels = tf.cast(labels, tf.int64)
+  # labels = tf.Print(labels, [labels], "Labels for batch: ", summarize=10)
+  # logits = tf.Print(logits, [tf.nn.softmax(logits)], "Preds for batch: ", summarize=10)
   cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
       logits, labels, name='cross_entropy_per_example')
   cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')

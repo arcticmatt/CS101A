@@ -42,6 +42,7 @@ from __future__ import print_function
 from datetime import datetime
 import os.path
 import re
+import sys
 import time
 
 import numpy as np
@@ -57,12 +58,18 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', '/tmp/cifar10_train',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_steps', 1000000,
+tf.app.flags.DEFINE_integer('max_steps', 50000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('num_gpus', 1,
                             """How many GPUs to use.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
+
+tf.app.flags.DEFINE_boolean('prod_dataset', True,
+                            """
+                            If true, expects data to be in the form of our 'production' dataset,
+                            which has a corrupt CSV header
+                            """)
 
 # TODO(smurching): Assert this while reading training examples
 tf.app.flags.DEFINE_integer('num_subsamples', 1324, 
@@ -165,6 +172,16 @@ def fill_feed_dict(placeholder_dict):
     result[labels_placeholder] = labels
   return result
 
+def build_placeholder_dict():
+    placeholder_dict = {}
+    for i in xrange(FLAGS.num_gpus):
+      features_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size, 
+        FLAGS.num_subsamples, FLAGS.num_coeffs, 1])
+      label_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size,])
+      scope_name = train_utils.get_scope_name(i)
+      placeholder_dict[scope_name] = (features_placeholder, label_placeholder)
+    return placeholder_dict  
+
 def train():
   """Train CIFAR-10 for a number of steps."""
   with tf.Graph().as_default(), tf.device('/cpu:0'):
@@ -192,13 +209,7 @@ def train():
 
 
     # Set up dict mapping GPU scopes to placeholders
-    placeholder_dict = {}
-    for i in xrange(FLAGS.num_gpus):
-      features_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size, 
-        FLAGS.num_coeffs, FLAGS.num_subsamples, 1])
-      label_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size,])
-      scope_name = train_utils.get_scope_name(i)
-      placeholder_dict[scope_name] = (features_placeholder, label_placeholder)
+    placeholder_dict = build_placeholder_dict()
 
 
     # Calculate the gradients for each model tower.
@@ -289,7 +300,7 @@ def train():
 
       assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
-      if step % 1 == 0:
+      if step % 50 == 0:
         num_examples_per_step = FLAGS.batch_size * FLAGS.num_gpus
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration / FLAGS.num_gpus
@@ -298,6 +309,8 @@ def train():
                       'sec/batch)')
         print (format_str % (datetime.now(), step, loss_value,
                              examples_per_sec, sec_per_batch))
+        sys.stdout.flush()
+        sys.stderr.flush()
 
       if step % 100 == 0:
         summary_str = sess.run(summary_op, feed_dict=feed_dict)
@@ -308,10 +321,21 @@ def train():
         checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
 
+def redirect_output():
+  prefix = datetime.now().strftime("%b-%d-%y-%I:%M:%S")
+  tf.gfile.MakeDirs("runs/")
+  stdout_file = "runs/%s.out"%prefix
+  stderr_file = "runs/%s.err"%prefix
+  print("Redirecting stdout to %s, stderr to %s"%(stdout_file, stderr_file))
+  sys.stdout = open(stdout_file, 'w')
+  sys.stderr = open(stderr_file, 'w')
+
+
 def main(argv=None):  # pylint: disable=unused-argument
   if tf.gfile.Exists(FLAGS.train_dir):
     tf.gfile.DeleteRecursively(FLAGS.train_dir)
   tf.gfile.MakeDirs(FLAGS.train_dir)
+  redirect_output()
   train()
 
 
