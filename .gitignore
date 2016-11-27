@@ -6,3 +6,4 @@
 *.fixed
 *.pyc
 mp3s/
+.ipynb_checkpoints/
