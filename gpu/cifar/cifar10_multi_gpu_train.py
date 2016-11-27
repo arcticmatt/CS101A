@@ -57,12 +57,18 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', '/tmp/cifar10_train',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_steps', 1000000,
+tf.app.flags.DEFINE_integer('max_steps', 10000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('num_gpus', 1,
                             """How many GPUs to use.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
+
+tf.app.flags.DEFINE_boolean('prod_dataset', True,
+                            """
+                            If true, expects data to be in the form of our 'production' dataset,
+                            which has a corrupt CSV header
+                            """)
 
 # TODO(smurching): Assert this while reading training examples
 tf.app.flags.DEFINE_integer('num_subsamples', 1324, 
@@ -165,6 +171,16 @@ def fill_feed_dict(placeholder_dict):
     result[labels_placeholder] = labels
   return result
 
+def build_placeholder_dict():
+    placeholder_dict = {}
+    for i in xrange(FLAGS.num_gpus):
+      features_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size, 
+        FLAGS.num_subsamples, FLAGS.num_coeffs, 1])
+      label_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size,])
+      scope_name = train_utils.get_scope_name(i)
+      placeholder_dict[scope_name] = (features_placeholder, label_placeholder)
+    return placeholder_dict  
+
 def train():
   """Train CIFAR-10 for a number of steps."""
   with tf.Graph().as_default(), tf.device('/cpu:0'):
@@ -192,13 +208,7 @@ def train():
 
 
     # Set up dict mapping GPU scopes to placeholders
-    placeholder_dict = {}
-    for i in xrange(FLAGS.num_gpus):
-      features_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size, 
-        FLAGS.num_coeffs, FLAGS.num_subsamples, 1])
-      label_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size,])
-      scope_name = train_utils.get_scope_name(i)
-      placeholder_dict[scope_name] = (features_placeholder, label_placeholder)
+    placeholder_dict = build_placeholder_dict()
 
 
     # Calculate the gradients for each model tower.
