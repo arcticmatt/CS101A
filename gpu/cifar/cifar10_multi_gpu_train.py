@@ -42,6 +42,7 @@ from __future__ import print_function
 from datetime import datetime
 import os.path
 import re
+import sys
 import time
 
 import numpy as np
@@ -57,7 +58,7 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', '/tmp/cifar10_train',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_steps', 10000,
+tf.app.flags.DEFINE_integer('max_steps', 50000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('num_gpus', 1,
                             """How many GPUs to use.""")
@@ -299,7 +300,7 @@ def train():
 
       assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
-      if step % 1 == 0:
+      if step % 50 == 0:
         num_examples_per_step = FLAGS.batch_size * FLAGS.num_gpus
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration / FLAGS.num_gpus
@@ -308,6 +309,8 @@ def train():
                       'sec/batch)')
         print (format_str % (datetime.now(), step, loss_value,
                              examples_per_sec, sec_per_batch))
+        sys.stdout.flush()
+        sys.stderr.flush()
 
       if step % 100 == 0:
         summary_str = sess.run(summary_op, feed_dict=feed_dict)
@@ -318,10 +321,21 @@ def train():
         checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
 
+def redirect_output():
+  prefix = datetime.now().strftime("%b-%d-%y-%I:%M:%S")
+  tf.gfile.MakeDirs("runs/")
+  stdout_file = "runs/%s.out"%prefix
+  stderr_file = "runs/%s.err"%prefix
+  print("Redirecting stdout to %s, stderr to %s"%(stdout_file, stderr_file))
+  sys.stdout = open(stdout_file, 'w')
+  sys.stderr = open(stderr_file, 'w')
+
+
 def main(argv=None):  # pylint: disable=unused-argument
   if tf.gfile.Exists(FLAGS.train_dir):
     tf.gfile.DeleteRecursively(FLAGS.train_dir)
   tf.gfile.MakeDirs(FLAGS.train_dir)
+  redirect_output()
   train()
 
 
