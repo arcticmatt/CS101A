@@ -164,10 +164,10 @@ def average_gradients(tower_grads):
   return average_grads
 
 
-def fill_feed_dict(placeholder_dict):
+def build_feed_dict(placeholder_dict, reader):
   result = {}
   for features_placeholder, labels_placeholder in placeholder_dict.values():
-    features, labels = train_utils.inputs(READER)
+    features, labels = train_utils.inputs(reader)
     result[features_placeholder] = features
     result[labels_placeholder] = labels
   return result
@@ -292,7 +292,7 @@ def train():
     for step in xrange(FLAGS.max_steps):
 
       # Map each placeholder in placeholder_dict to a new batch of data
-      feed_dict = fill_feed_dict(placeholder_dict)
+      feed_dict = build_feed_dict(placeholder_dict, READER)
 
       start_time = time.time()
       _, loss_value = sess.run([train_op, loss], feed_dict=feed_dict)

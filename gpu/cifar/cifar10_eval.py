@@ -41,7 +41,8 @@ import time
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.models.image.cifar10 import cifar10
+import cifar10
+import train_utils
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -58,8 +59,27 @@ tf.app.flags.DEFINE_integer('num_examples', 10000,
 tf.app.flags.DEFINE_boolean('run_once', False,
                          """Whether to run eval only once.""")
 
+# TODO(smurching): Remove extra flags
+tf.app.flags.DEFINE_boolean('prod_dataset', True,
+                            """
+                            If true, expects data to be in the form of our 'production' dataset,
+                            which has a corrupt CSV header
+                            """)
 
-def eval_once(saver, summary_writer, top_k_op, summary_op):
+# TODO(smurching): Assert this while reading training examples
+tf.app.flags.DEFINE_integer('num_subsamples', 1324, 
+                            """Number of sampled values for each MFCC coefficient""")
+
+tf.app.flags.DEFINE_integer('num_coeffs', 100, 
+                            """Number of MFCC coefficients""")
+
+tf.app.flags.DEFINE_string('train_data', None, 'Training data CSV')
+
+READER = train_utils.BatchReader(filename=FLAGS.train_data,
+  batch_size=FLAGS.batch_size, line_processor=train_utils.SongFeatureExtractor(),
+  num_features=FLAGS.num_subsamples * FLAGS.num_coeffs)
+
+def eval_once(saver, summary_writer, top_k_op, summary_op, feed_dict):
   """Run Eval once.
 
   Args:
@@ -67,6 +87,7 @@ def eval_once(saver, summary_writer, top_k_op, summary_op):
     summary_writer: Summary writer.
     top_k_op: Top K op.
     summary_op: Summary op.
+    feed_dict: Feed dictionary to use in evaluating ops
   """
   with tf.Session() as sess:
     ckpt = tf.train.get_checkpoint_state(FLAGS.checkpoint_dir)
@@ -81,51 +102,47 @@ def eval_once(saver, summary_writer, top_k_op, summary_op):
       print('No checkpoint file found')
       return
 
-    # Start the queue runners.
-    coord = tf.train.Coordinator()
-    try:
-      threads = []
-      for qr in tf.get_collection(tf.GraphKeys.QUEUE_RUNNERS):
-        threads.extend(qr.create_threads(sess, coord=coord, daemon=True,
-                                         start=True))
+    # Begin evaluation on FLAGS.num_examples training points
+    num_iter = int(math.ceil(FLAGS.num_examples / FLAGS.batch_size))
+    true_count = 0  # Counts the number of correct predictions.
+    total_sample_count = num_iter * FLAGS.batch_size
+    step = 0
 
-      num_iter = int(math.ceil(FLAGS.num_examples / FLAGS.batch_size))
-      true_count = 0  # Counts the number of correct predictions.
-      total_sample_count = num_iter * FLAGS.batch_size
-      step = 0
-      while step < num_iter and not coord.should_stop():
-        predictions = sess.run([top_k_op])
-        true_count += np.sum(predictions)
-        step += 1
+    while step < num_iter:
+      predictions = sess.run([top_k_op], feed_dict=feed_dict)
+      true_count += np.sum(predictions)
+      step += 1
 
-      # Compute precision @ 1.
-      precision = true_count / total_sample_count
-      print('%s: precision @ 1 = %.3f' % (datetime.now(), precision))
+    # Compute precision @ 1.
+    precision = true_count / total_sample_count
+    print('%s: precision @ 1 = %.3f' % (datetime.now(), precision))
 
-      summary = tf.Summary()
-      summary.ParseFromString(sess.run(summary_op))
-      summary.value.add(tag='Precision @ 1', simple_value=precision)
-      summary_writer.add_summary(summary, global_step)
-    except Exception as e:  # pylint: disable=broad-except
-      coord.request_stop(e)
+    summary = tf.Summary()
+    summary.ParseFromString(sess.run(summary_op, feed_dict=feed_dict))
+    summary.value.add(tag='Precision @ 1', simple_value=precision)
+    summary_writer.add_summary(summary, global_step)
 
-    coord.request_stop()
-    coord.join(threads, stop_grace_period_secs=10)
-
+def build_feed_dict(reader, features_placeholder, label_placeholder):
+  result = {}
+  features, labels = train_utils.inputs(reader)
+  result[features_placeholder] = features
+  result[label_placeholder] = labels
+  return result
 
 def evaluate():
   """Eval CIFAR-10 for a number of steps."""
   with tf.Graph().as_default() as g:
-    # Get images and labels for CIFAR-10.
-    eval_data = FLAGS.eval_data == 'test'
-    images, labels = cifar10.inputs(eval_data=eval_data)
+    # Get feature and label placeholders
+    features_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size,
+      FLAGS.num_subsamples, FLAGS.num_coeffs, 1])
+    label_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size,])
 
     # Build a Graph that computes the logits predictions from the
     # inference model.
-    logits = cifar10.inference(images)
+    logits = cifar10.inference(features_placeholder)
 
     # Calculate predictions.
-    top_k_op = tf.nn.in_top_k(logits, labels, 1)
+    top_k_op = tf.nn.in_top_k(logits, label_placeholder, 1)
 
     # Restore the moving average version of the learned variables for eval.
     variable_averages = tf.train.ExponentialMovingAverage(
@@ -135,18 +152,17 @@ def evaluate():
 
     # Build the summary operation based on the TF collection of Summaries.
     summary_op = tf.merge_all_summaries()
-
     summary_writer = tf.train.SummaryWriter(FLAGS.eval_dir, g)
 
     while True:
-      eval_once(saver, summary_writer, top_k_op, summary_op)
+      feed_dict = build_feed_dict(READER, features_placeholder, label_placeholder)
+      eval_once(saver, summary_writer, top_k_op, summary_op, feed_dict)
       if FLAGS.run_once:
         break
       time.sleep(FLAGS.eval_interval_secs)
 
 
 def main(argv=None):  # pylint: disable=unused-argument
-  cifar10.maybe_download_and_extract()
   if tf.gfile.Exists(FLAGS.eval_dir):
     tf.gfile.DeleteRecursively(FLAGS.eval_dir)
   tf.gfile.MakeDirs(FLAGS.eval_dir)

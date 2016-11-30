@@ -60,15 +60,15 @@ FLAGS = tf.app.flags.FLAGS
 # tf.app.flags.DEFINE_boolean('use_fp16', False,
 #                             """Train the model using fp16.""")
 
-# Global constants describing the CIFAR-10 data set.
-# TODO: Replace these
-IMAGE_SIZE = cifar10_input.IMAGE_SIZE
-
-# TODO(smurching): Change to # of multiclass classes
-NUM_CLASSES = 4
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = cifar10_input.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = cifar10_input.NUM_EXAMPLES_PER_EPOCH_FOR_EVAL
 
+# Some network parameters
+# TODO(smurching): Make these flags?
+NUM_CONV_LAYERS = 5
+NUM_RECC_LAYERS = 2
+CONV_FILTER_SIZE = [5, 5]
+RECC_LAYER_SIZE = 30
 
 # Constants describing the training process.
 MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
@@ -179,12 +179,10 @@ def build_recurrent_layers(input_tensor, num_layers, units_per_layer=3, activati
 
     with tf.variable_scope('recurrent_%d'%(i + 1)) as scope:
       # TODO(smurching): Pick dropout probability more intelligently, currently just a random guess
-      print("Recurrent layer %s with activation %s has input dim %s"%(i, curr_activation,
-        final_layer.get_shape()))
       # Get output of recurrent layer as a <timesteps>-length list of prediction tensors of shape
       # [batch_size, num_units] if this isn't our final recurrent layer. Otherwise, just get a single 2D
       # output tensor of shape [batch_size, num_units]
-      final_layer = tflearn.layers.recurrent.gru(final_layer, n_units=units_per_layer, scope=scope,
+      final_layer = tflearn.layers.recurrent.lstm(final_layer, n_units=units_per_layer, scope=scope,
         reuse=False, activation=curr_activation, dropout=dropout, return_seq=(not is_last_layer))
       if not is_last_layer:
         final_layer = tf.pack(final_layer, axis=1)
@@ -208,13 +206,18 @@ def inference(images):
   # If we only ran this model on a single GPU, we could simplify this function
   # by replacing all instances of tf.get_variable() with tf.Variable().
   #
+  print("Training network with %s convolutional layers, %s recurrent layers using learning rate %s"%(
+    NUM_CONV_LAYERS, NUM_RECC_LAYERS, INITIAL_LEARNING_RATE))
+  print("Convolutional layer filter size: %s"%CONV_FILTER_SIZE)
+  print("Each recurrent layer has %s units"%RECC_LAYER_SIZE)
 
-  convolutional_layers = build_conv_layers(images, num_layers=5, filter_size=[3, 10])
+  convolutional_layers = build_conv_layers(images, num_layers=NUM_CONV_LAYERS,
+    filter_size=CONV_FILTER_SIZE)
   conv_reshaped = tf.squeeze(convolutional_layers, squeeze_dims=[3])
   print("RNN input shape (batch_size x timesteps x num_coeffs): %s"%conv_reshaped.get_shape())
 
-  return build_recurrent_layers(conv_reshaped, num_layers=2,
-    units_per_layer=30, activation='sigmoid')
+  return build_recurrent_layers(conv_reshaped, num_layers=NUM_RECC_LAYERS,
+    units_per_layer=RECC_LAYER_SIZE, activation='sigmoid')
 
 def loss(logits, labels):
   """Add L2Loss to all the trainable variables.
