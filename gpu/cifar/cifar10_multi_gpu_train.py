@@ -352,11 +352,14 @@ def train():
 
         print('===== output_node_names = {} ====='.format(output_node_names))
         print('Freezing graph...')
-        freeze_graph.freeze_graph(input_graph_path, input_saver_def_path,
-                                  input_binary, checkpoint_path,
-                                  output_node_names, restore_op_name,
-                                  filename_tensor_name, output_graph_path,
-                                  True, '')
+        try:
+          freeze_graph.freeze_graph(input_graph_path, input_saver_def_path,
+                                    input_binary, checkpoint_path,
+                                    output_node_names, restore_op_name,
+                                    filename_tensor_name, output_graph_path,
+                                    True, '')
+        except Exception as e:
+          print('Freezing graph failed with exception {}'.format(e))
 
 
 def redirect_output():
