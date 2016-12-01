@@ -7,7 +7,7 @@ import os
 import csv
 
 
-MFCC_DATA_FILENAME = 'mfcc_data.csv'
+MFCC_DATA_FILENAME = '../mfcc_data.csv'
 NUM_COEFFS = 100
 NUM_FRAMES = 1325
 HOP_LENGTH = 500

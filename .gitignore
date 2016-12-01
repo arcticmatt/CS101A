@@ -5,6 +5,8 @@
 *.csv
 *.fixed
 *.pyc
+*.h5
+*.pem
 mp3s/
 <<<<<<< HEAD
 .ipynb_checkpoints/

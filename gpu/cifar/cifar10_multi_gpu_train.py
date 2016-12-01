@@ -48,7 +48,6 @@ import time
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
-# from tensorflow.models.image.cifar10 import cifar10
 import cifar10
 
 import train_utils
@@ -80,9 +79,13 @@ tf.app.flags.DEFINE_integer('num_coeffs', 100,
 
 tf.app.flags.DEFINE_string('train_data', None, 'Training data CSV')
 
-READER = train_utils.BatchReader(filename=FLAGS.train_data,
-  batch_size=FLAGS.batch_size, line_processor=train_utils.SongFeatureExtractor(),
-  num_features=FLAGS.num_subsamples * FLAGS.num_coeffs)
+if FLAGS.prod_dataset:
+  READER = train_utils.HDF5BatchProcessor(filename=FLAGS.train_data,
+    batch_size=FLAGS.batch_size)
+else:
+  READER = train_utils.BatchProcessor(filename=FLAGS.train_data,
+    batch_size=FLAGS.batch_size, num_subsamples=FLAGS.num_subsamples,
+    num_coeffs=FLAGS.num_coeffs, prod_dataset=FLAGS.prod_dataset)
 
 def tower_loss(scope, images, labels):
   """Calculate the total loss on a single tower running the CIFAR model.
@@ -300,7 +303,7 @@ def train():
 
       assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
-      if step % 50 == 0:
+      if step % 5 == 0:
         num_examples_per_step = FLAGS.batch_size * FLAGS.num_gpus
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration / FLAGS.num_gpus

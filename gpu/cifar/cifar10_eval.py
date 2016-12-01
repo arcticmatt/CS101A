@@ -75,7 +75,7 @@ tf.app.flags.DEFINE_integer('num_coeffs', 100,
 
 tf.app.flags.DEFINE_string('train_data', None, 'Training data CSV')
 
-READER = train_utils.BatchReader(filename=FLAGS.train_data,
+READER = train_utils.BatchProcessor(filename=FLAGS.train_data,
   batch_size=FLAGS.batch_size, line_processor=train_utils.SongFeatureExtractor(),
   num_features=FLAGS.num_subsamples * FLAGS.num_coeffs)
 

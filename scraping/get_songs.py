@@ -7,10 +7,10 @@ import sys
 import time
 from requests.exceptions import ConnectionError
 
-SONG_FILENAME = 'song_data.csv'
-OFFSET_FILENAME = 'end_offsets.csv'
+SONG_FILENAME = '../song_data.csv'
+OFFSET_FILENAME = '../end_offsets.csv'
 
-MP3_SUBDIR = './mp3s/'
+MP3_SUBDIR = '../mp3s/'
 if not os.path.exists(MP3_SUBDIR):
     os.makedirs(MP3_SUBDIR)
 CHUNK_SIZE = 1024 * 1024
