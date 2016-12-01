@@ -52,6 +52,8 @@ import cifar10
 
 import train_utils
 
+import freeze_graph
+
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('train_dir', '/tmp/cifar10_train',
@@ -212,8 +214,9 @@ def train():
 
     # Calculate the gradients for each model tower.
     tower_grads = []
+    print("Num gpus = {}".format(FLAGS.num_gpus))
     for i in xrange(FLAGS.num_gpus):
-      with tf.device('/gpu:%d' % i):
+      with tf.device('/cpu:%d' % i):
         scope_name = train_utils.get_scope_name(i)
         with tf.name_scope(scope_name) as scope:
 
@@ -314,10 +317,48 @@ def train():
         summary_str = sess.run(summary_op, feed_dict=feed_dict)
         summary_writer.add_summary(summary_str, step)
 
-      # Save the model checkpoint periodically.
+      # Save the model checkpoint periodically and freeze the graph.
       if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
-        checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
-        saver.save(sess, checkpoint_path, global_step=step)
+        # Save model checkpoint.
+        print('Saving model checkpoint...')
+        checkpoint_prefix = os.path.join(FLAGS.train_dir, 'model.ckpt')
+        checkpoint_state_name = 'checkpoint_state'
+        checkpoint_path = saver.save(sess, checkpoint_prefix, global_step=step,
+                                     latest_filename=checkpoint_state_name)
+        
+        input_graph_name = 'input_graph.pb'
+        output_graph_name = "output_graph.pb"
+        # Save model structure.
+        print('Saving model structure...')
+        tf.train.write_graph(sess.graph_def, FLAGS.train_dir, input_graph_name)
+
+        print(sess.graph_def)
+        # Get names of all tensors
+        names = [n.name for n in sess.graph_def.node if '/' not in n.name and n.name != 'init']
+        all_names = ','.join(names)
+
+        # Freeze graph.
+        input_graph_path = os.path.join(FLAGS.train_dir, input_graph_name)
+        input_saver_def_path = ''
+        input_binary = False
+        output_node_names = all_names 
+        # output_node_names = 'global_step'
+        restore_op_name = 'save/restore_all'
+        filename_tensor_name = 'save/Const:0'
+        output_graph_path = os.path.join(FLAGS.train_dir, output_graph_name)
+        clear_devices = True
+
+        print('===== output_node_names = {} ====='.format(output_node_names))
+        print('Freezing graph...')
+        try:
+          freeze_graph.freeze_graph(input_graph_path, input_saver_def_path,
+                                    input_binary, checkpoint_path,
+                                    output_node_names, restore_op_name,
+                                    filename_tensor_name, output_graph_path,
+                                    True, '')
+        except Exception as e:
+          print('Freezing graph failed with exception {}'.format(e))
+
 
 def redirect_output():
   prefix = datetime.now().strftime("%b-%d-%y-%I:%M:%S")
