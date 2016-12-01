@@ -182,8 +182,9 @@ def build_recurrent_layers(input_tensor, num_layers, units_per_layer=3, activati
       # Get output of recurrent layer as a <timesteps>-length list of prediction tensors of shape
       # [batch_size, num_units] if this isn't our final recurrent layer. Otherwise, just get a single 2D
       # output tensor of shape [batch_size, num_units]
-      final_layer = tflearn.layers.recurrent.lstm(final_layer, n_units=units_per_layer, scope=scope,
-        reuse=False, activation=curr_activation, dropout=dropout, return_seq=(not is_last_layer))
+      with tf.device("/cpu:0"):
+        final_layer = tflearn.layers.recurrent.lstm(final_layer, n_units=units_per_layer, scope=scope,
+          reuse=False, activation=curr_activation, dropout=dropout, return_seq=(not is_last_layer))
       if not is_last_layer:
         final_layer = tf.pack(final_layer, axis=1)
       
