@@ -332,7 +332,7 @@ def train():
         print('Saving model structure...')
         tf.train.write_graph(sess.graph_def, FLAGS.train_dir, input_graph_name)
 
-        print(sess.graph_def)
+        # print(sess.graph_def)
         # Get names of all tensors
         names = [n.name for n in sess.graph_def.node if '/' not in n.name and n.name != 'init']
         all_names = ','.join(names)
@@ -350,6 +350,7 @@ def train():
 
         # print('===== output_node_names = {} ====='.format(output_node_names))
         print('Freezing graph...')
+        s = time.time()
         try:
           freeze_graph.freeze_graph(input_graph_path, input_saver_def_path,
                                     input_binary, checkpoint_path,
@@ -358,7 +359,7 @@ def train():
                                     True, '')
         except Exception as e:
           print('Freezing graph failed with exception {}'.format(e))
-
+        print("Froze graph, took %s sec"%(time.time() - s))
 
 def redirect_output():
   prefix = datetime.now().strftime("%b-%d-%y-%I:%M:%S")
