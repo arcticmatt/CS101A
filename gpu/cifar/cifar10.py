@@ -184,7 +184,7 @@ def build_recurrent_layers(input_tensor, num_layers, units_per_layer=3, activati
       # output tensor of shape [batch_size, num_units]
       with tf.device("/cpu:0"):
         final_layer = tflearn.layers.recurrent.lstm(final_layer, n_units=units_per_layer, scope=scope,
-          reuse=False, activation=curr_activation, dropout=dropout, return_seq=(not is_last_layer))
+          reuse=None, activation=curr_activation, dropout=dropout, return_seq=(not is_last_layer))
       if not is_last_layer:
         final_layer = tf.pack(final_layer, axis=1)
       
