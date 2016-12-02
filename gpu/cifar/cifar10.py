@@ -158,7 +158,7 @@ def build_conv_layers(input_tensor, num_layers, filter_size=None):
       conv = tflearn.layers.conv.conv_2d (final_layer, nb_filter=1, filter_size=filter_size, strides=1,
         padding='same', activation='linear', bias=True, weights_init='uniform_scaling',
         bias_init='zeros', regularizer=None, weight_decay=0.001,
-        restore=True, reuse=False, scope=scope)
+        restore=True, reuse=None, scope=scope)
 
     # TODO(smurching): Intelligently pick values for the kernel size/stride here
     final_layer = tflearn.layers.conv.max_pool_2d (conv, kernel_size=[1, 3, 3, 1],

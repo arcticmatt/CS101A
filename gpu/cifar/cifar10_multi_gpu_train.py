@@ -216,7 +216,7 @@ def train():
     tower_grads = []
     print("Num gpus = {}".format(FLAGS.num_gpus))
     for i in xrange(FLAGS.num_gpus):
-      with tf.device('/cpu:%d' % i):
+      with tf.device('/gpu:%d' % i):
         scope_name = train_utils.get_scope_name(i)
         with tf.name_scope(scope_name) as scope:
 
@@ -301,7 +301,7 @@ def train():
 
       assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
-      if step % 50 == 0:
+      if step % 10 == 0:
         num_examples_per_step = FLAGS.batch_size * FLAGS.num_gpus
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration / FLAGS.num_gpus
@@ -348,7 +348,7 @@ def train():
         output_graph_path = os.path.join(FLAGS.train_dir, output_graph_name)
         clear_devices = True
 
-        print('===== output_node_names = {} ====='.format(output_node_names))
+        # print('===== output_node_names = {} ====='.format(output_node_names))
         print('Freezing graph...')
         try:
           freeze_graph.freeze_graph(input_graph_path, input_saver_def_path,
