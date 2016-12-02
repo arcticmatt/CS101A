@@ -191,12 +191,13 @@ def build_recurrent_layers(input_tensor, num_layers, units_per_layer=3, activati
   return final_layer
 
 
-def inference(images):
+def inference(songs):
   """Build the CIFAR-10 model.
 
   Args:
-    images: Images returned from distorted_inputs() or inputs().
-    NOTE: Numpy array, not a tf constant.
+    songs: MFCC data (numpy array of shape [batch_size, num_subsamples, num_coeffs, 1]) 
+    returned from train_utils.inputs().
+
 
   Returns:
     Logits.
@@ -212,7 +213,7 @@ def inference(images):
   print("Convolutional layer filter size: %s"%CONV_FILTER_SIZE)
   print("Each recurrent layer has %s units"%RECC_LAYER_SIZE)
 
-  convolutional_layers = build_conv_layers(images, num_layers=NUM_CONV_LAYERS,
+  convolutional_layers = build_conv_layers(songs, num_layers=NUM_CONV_LAYERS,
     filter_size=CONV_FILTER_SIZE)
   conv_reshaped = tf.squeeze(convolutional_layers, squeeze_dims=[3])
   print("RNN input shape (batch_size x timesteps x num_coeffs): %s"%conv_reshaped.get_shape())
