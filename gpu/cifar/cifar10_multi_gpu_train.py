@@ -84,6 +84,9 @@ tf.app.flags.DEFINE_string('train_data', None, 'Training data HDF5 file')
 READER = train_utils.HDF5BatchProcessor(filename=FLAGS.train_data,
   batch_size=FLAGS.batch_size)
 
+FEATURE_PLACEHOLDER_NAME = "FEATURES_PLACEHOLDER"
+LABEL_PLACEHOLDER_NAME = "LABEL_PLACEHOLDER"
+
 def tower_loss(scope, images, labels):
   """Calculate the total loss on a single tower running the CIFAR model.
 
@@ -163,6 +166,11 @@ def average_gradients(tower_grads):
     average_grads.append(grad_and_var)
   return average_grads
 
+def _features_placeholder_name(gpu_idx):
+  return "%s_%s"%(FEATURE_PLACEHOLDER_NAME, gpu_idx)
+
+def _labels_placeholder_name(gpu_idx):
+  return "%s_%s"%(LABEL_PLACEHOLDER_NAME, gpu_idx)
 
 def build_feed_dict(placeholder_dict, reader):
   result = {}
@@ -175,12 +183,13 @@ def build_feed_dict(placeholder_dict, reader):
 def build_placeholder_dict():
     placeholder_dict = {}
     for i in xrange(FLAGS.num_gpus):
-      features_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size, 
-        FLAGS.num_subsamples, FLAGS.num_coeffs, 1])
-      label_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size,])
+      features_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size,
+        FLAGS.num_subsamples, FLAGS.num_coeffs, 1], name=_features_placeholder_name(i))
+      label_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size,],
+        name=_labels_placeholder_name(i))
       scope_name = train_utils.get_scope_name(i)
       placeholder_dict[scope_name] = (features_placeholder, label_placeholder)
-    return placeholder_dict  
+    return placeholder_dict
 
 def train():
   """Train CIFAR-10 for a number of steps."""
@@ -219,7 +228,6 @@ def train():
       with tf.device('/gpu:%d' % i):
         scope_name = train_utils.get_scope_name(i)
         with tf.name_scope(scope_name) as scope:
-          print("Reusing variables for scope %s?: %s"%(tf.get_variable_scope().name, tf.get_variable_scope().reuse))
           # Look up placeholder images, labels for current device
           image, labels = placeholder_dict[scope_name]
 
