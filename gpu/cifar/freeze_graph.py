@@ -103,7 +103,9 @@ def freeze_graph(input_graph, input_saver, input_binary, input_checkpoint,
       node.device = ""
   _ = tf.import_graph_def(input_graph_def, name="")
 
-  with tf.Session() as sess:
+  with tf.Session(config=tf.ConfigProto(
+        allow_soft_placement=True,
+        log_device_placement=FLAGS.log_device_placement)) as sess:
     if input_saver:
       with tf.gfile.FastGFile(input_saver, mode) as f:
         saver_def = tf.train.SaverDef()
@@ -123,7 +125,6 @@ def freeze_graph(input_graph, input_saver, input_binary, input_checkpoint,
   with tf.gfile.GFile(output_graph, "wb") as f:
     f.write(output_graph_def.SerializeToString())
   print("%d ops in the final graph." % len(output_graph_def.node))
-
 
 def main(unused_args):
   freeze_graph(FLAGS.input_graph, FLAGS.input_saver, FLAGS.input_binary,
