@@ -56,32 +56,6 @@ import freeze_graph
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('train_dir', '/tmp/cifar10_train',
-                           """Directory where to write event logs """
-                           """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_steps', 100000,
-                            """Number of batches to run.""")
-tf.app.flags.DEFINE_integer('num_gpus', 8,
-                            """How many GPUs to use.""")
-tf.app.flags.DEFINE_boolean('log_device_placement', False,
-                            """Whether to log device placement.""")
-
-tf.app.flags.DEFINE_integer('num_conv_layers', 4,
-                            """How many Convolution Layers to use.""")
-tf.app.flags.DEFINE_integer('num_recc_layers', 2,
-                            """How many Recurrent Layers to use.""")
-tf.app.flags.DEFINE_integer('recc_layer_size', 30,
-                            """Number of units in recc layer""")
-
-# TODO(smurching): Assert this while reading training examples
-tf.app.flags.DEFINE_integer('num_subsamples', 1324,
-                            """Number of sampled values for each MFCC coefficient""")
-
-tf.app.flags.DEFINE_integer('num_coeffs', 100,
-                            """Number of MFCC coefficients""")
-
-tf.app.flags.DEFINE_string('train_data', None, 'Training data HDF5 file')
-
 READER = train_utils.HDF5BatchProcessor(filename=FLAGS.train_data,
   batch_size=FLAGS.batch_size)
 
