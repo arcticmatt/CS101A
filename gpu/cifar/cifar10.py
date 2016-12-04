@@ -65,16 +65,17 @@ NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = cifar10_input.NUM_EXAMPLES_PER_EPOCH_FOR_EVAL
 
 # Some network parameters
 # TODO(smurching): Make these flags?
-NUM_CONV_LAYERS = 5
+NUM_CONV_LAYERS = 4
 NUM_RECC_LAYERS = 2
-CONV_FILTER_SIZE = [5, 5]
+CONV_FILTER_SIZE = [3, 3]
+MAX_POOL_KERNEL_SIZE = [[2, 2], [3, 3], [4, 4], [4, 4]]
 RECC_LAYER_SIZE = 30
 
 # Constants describing the training process.
 MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
 NUM_EPOCHS_PER_DECAY = 350.0      # Epochs after which learning rate decays.
 LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
-INITIAL_LEARNING_RATE = 0.001       # Initial learning rate.
+INITIAL_LEARNING_RATE = 0.0005       # Initial learning rate.
 
 def _activation_summary(x):
   """Helper to create summaries for activations.
@@ -161,7 +162,7 @@ def build_conv_layers(input_tensor, num_layers, filter_size=None):
         restore=True, reuse=None, scope=scope)
 
     # TODO(smurching): Intelligently pick values for the kernel size/stride here
-    final_layer = tflearn.layers.conv.max_pool_2d (conv, kernel_size=[1, 3, 3, 1],
+    final_layer = tflearn.layers.conv.max_pool_2d (conv, kernel_size=[1] + MAX_POOL_KERNEL_SIZE[i] + [1],
       strides=[1, 2, 2, 1], padding='same', name='MaxPool2D_%d'%i)
   return final_layer
 
