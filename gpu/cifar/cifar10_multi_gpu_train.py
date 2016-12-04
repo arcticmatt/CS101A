@@ -66,12 +66,6 @@ tf.app.flags.DEFINE_integer('num_gpus', 8,
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
 
-tf.app.flags.DEFINE_boolean('prod_dataset', True,
-                            """
-                            If true, expects data to be in the form of our 'production' dataset,
-                            which has a corrupt CSV header
-                            """)
-
 # TODO(smurching): Assert this while reading training examples
 tf.app.flags.DEFINE_integer('num_subsamples', 1324, 
                             """Number of sampled values for each MFCC coefficient""")
@@ -295,7 +289,6 @@ def train():
 
     # Start the queue runners.
     tf.train.start_queue_runners(sess=sess)
-
     summary_writer = tf.train.SummaryWriter(FLAGS.train_dir, sess.graph)
 
     for step in xrange(FLAGS.max_steps):

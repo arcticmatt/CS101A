@@ -60,12 +60,6 @@ tf.app.flags.DEFINE_boolean('run_once', False,
                          """Whether to run eval only once.""")
 
 # TODO(smurching): Remove extra flags
-tf.app.flags.DEFINE_boolean('prod_dataset', True,
-                            """
-                            If true, expects data to be in the form of our 'production' dataset,
-                            which has a corrupt CSV header
-                            """)
-
 # TODO(smurching): Assert this while reading training examples
 tf.app.flags.DEFINE_integer('num_subsamples', 1324, 
                             """Number of sampled values for each MFCC coefficient""")
