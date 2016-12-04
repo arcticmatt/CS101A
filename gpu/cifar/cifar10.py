@@ -60,16 +60,41 @@ FLAGS = tf.app.flags.FLAGS
 # tf.app.flags.DEFINE_boolean('use_fp16', False,
 #                             """Train the model using fp16.""")
 
+tf.app.flags.DEFINE_string('train_dir', '/tmp/cifar10_train',
+                           """Directory where to write event logs """
+                           """and checkpoint.""")
+tf.app.flags.DEFINE_integer('max_steps', 100000,
+                            """Number of batches to run.""")
+tf.app.flags.DEFINE_integer('num_gpus', 8,
+                            """How many GPUs to use.""")
+tf.app.flags.DEFINE_boolean('log_device_placement', False,
+                            """Whether to log device placement.""")
+# TODO(smurching): Assert this while reading training examples
+tf.app.flags.DEFINE_integer('num_subsamples', 1324,
+                            """Number of sampled values for each MFCC coefficient""")
+
+tf.app.flags.DEFINE_integer('num_coeffs', 100,
+                            """Number of MFCC coefficients""")
+
+tf.app.flags.DEFINE_string('train_data', None, 'Training data HDF5 file')
+
+tf.app.flags.DEFINE_integer('num_conv_layers', 4,
+                            """How many Convolution Layers to use.""")
+tf.app.flags.DEFINE_integer('num_recc_layers', 2,
+                            """How many Recurrent Layers to use.""")
+tf.app.flags.DEFINE_integer('recc_layer_size', 30,
+                            """Number of units in recc layer""")
+
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = cifar10_input.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = cifar10_input.NUM_EXAMPLES_PER_EPOCH_FOR_EVAL
 
 # Some network parameters
 # TODO(smurching): Make these flags?
-NUM_CONV_LAYERS = 6
-NUM_RECC_LAYERS = 2
 CONV_FILTER_SIZE = [3, 3]
 MAX_POOL_KERNEL_SIZE = [[2, 2], [2, 2], [2, 2], [3, 3], [4, 4], [4, 4]]
-RECC_LAYER_SIZE = 30
+NUM_CONV_LAYERS = FLAGS.num_conv_layers
+NUM_RECC_LAYERS = FLAGS.num_recc_layers
+RECC_LAYER_SIZE = FLAGS.recc_layer_size
 
 # Constants describing the training process.
 MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
@@ -140,8 +165,8 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
 
 def build_conv_layers(input_tensor, num_layers, filter_size=None):
   '''
-  Returns a tensor corresponding to <num_layers> connected convolutional layers 
-  with max pooling between layers. The first convolutional layer takes 
+  Returns a tensor corresponding to <num_layers> connected convolutional layers
+  with max pooling between layers. The first convolutional layer takes
   input_tensor as its input.
 
   filter_size: shape (along the [num_subsamples, num_coeffs] axes) of filter
@@ -175,12 +200,12 @@ def build_recurrent_layers(input_tensor, num_layers, units_per_layer=3, activati
   for i in xrange(num_layers):
     is_last_layer = (i == num_layers - 1)
     if is_last_layer:
-      # We don't apply softmax for the last layer because 
-      # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits 
-      # and performs the softmax internally for efficiency.      
-      curr_activation = 'linear'      
+      # We don't apply softmax for the last layer because
+      # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits
+      # and performs the softmax internally for efficiency.
+      curr_activation = 'linear'
     else:
-      curr_activation = activation      
+      curr_activation = activation
 
     with tf.variable_scope('recurrent_%d'%(i + 1)) as scope:
       # TODO(smurching): Pick dropout probability more intelligently, currently just a random guess
@@ -192,7 +217,7 @@ def build_recurrent_layers(input_tensor, num_layers, units_per_layer=3, activati
           reuse=None, activation=curr_activation, dropout=dropout, return_seq=(not is_last_layer))
       if not is_last_layer:
         final_layer = tf.pack(final_layer, axis=1)
-      
+
   return final_layer
 
 
@@ -200,7 +225,7 @@ def inference(songs):
   """Build the CIFAR-10 model.
 
   Args:
-    songs: MFCC data (numpy array of shape [batch_size, num_subsamples, num_coeffs, 1]) 
+    songs: MFCC data (numpy array of shape [batch_size, num_subsamples, num_coeffs, 1])
     returned from train_utils.inputs().
 
 
