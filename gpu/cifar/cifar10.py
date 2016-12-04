@@ -208,7 +208,6 @@ def inference(songs):
   # If we only ran this model on a single GPU, we could simplify this function
   # by replacing all instances of tf.get_variable() with tf.Variable().
   #
-  print("Flags num examples: %s"%FLAGS.num_examples)
   print("Training network with %s convolutional layers, %s recurrent layers using learning rate %s"%(
     NUM_CONV_LAYERS, NUM_RECC_LAYERS, INITIAL_LEARNING_RATE))
   print("Convolutional layer filter size: %s"%CONV_FILTER_SIZE)
