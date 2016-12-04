@@ -75,18 +75,15 @@ tf.app.flags.DEFINE_integer('num_coeffs', 100,
 
 tf.app.flags.DEFINE_string('train_data', None, 'Training data CSV')
 
-READER = train_utils.BatchProcessor(filename=FLAGS.train_data,
-  batch_size=FLAGS.batch_size, line_processor=train_utils.SongFeatureExtractor(),
-  num_features=FLAGS.num_subsamples * FLAGS.num_coeffs)
+READER = train_utils.HDF5BatchProcessor(filename=FLAGS.train_data,
+  batch_size=FLAGS.batch_size)
 
-def eval_once(saver, summary_writer, top_k_op, summary_op, feed_dict):
+def eval_once(saver, top_k_op, feed_dict):
   """Run Eval once.
 
   Args:
     saver: Saver.
-    summary_writer: Summary writer.
     top_k_op: Top K op.
-    summary_op: Summary op.
     feed_dict: Feed dictionary to use in evaluating ops
   """
   with tf.Session() as sess:
@@ -117,11 +114,6 @@ def eval_once(saver, summary_writer, top_k_op, summary_op, feed_dict):
     precision = true_count / total_sample_count
     print('%s: precision @ 1 = %.3f' % (datetime.now(), precision))
 
-    summary = tf.Summary()
-    summary.ParseFromString(sess.run(summary_op, feed_dict=feed_dict))
-    summary.value.add(tag='Precision @ 1', simple_value=precision)
-    summary_writer.add_summary(summary, global_step)
-
 def build_feed_dict(reader, features_placeholder, label_placeholder):
   result = {}
   features, labels = train_utils.inputs(reader)
@@ -135,7 +127,7 @@ def evaluate():
     # Get feature and label placeholders
     features_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size,
       FLAGS.num_subsamples, FLAGS.num_coeffs, 1])
-    label_placeholder = tf.placeholder(tf.float32, shape=[FLAGS.batch_size,])
+    label_placeholder = tf.placeholder(tf.int32, shape=[FLAGS.batch_size,])
 
     # Build a Graph that computes the logits predictions from the
     # inference model.
@@ -150,13 +142,9 @@ def evaluate():
     variables_to_restore = variable_averages.variables_to_restore()
     saver = tf.train.Saver(variables_to_restore)
 
-    # Build the summary operation based on the TF collection of Summaries.
-    summary_op = tf.merge_all_summaries()
-    summary_writer = tf.train.SummaryWriter(FLAGS.eval_dir, g)
-
     while True:
       feed_dict = build_feed_dict(READER, features_placeholder, label_placeholder)
-      eval_once(saver, summary_writer, top_k_op, summary_op, feed_dict)
+      eval_once(saver, top_k_op, feed_dict)
       if FLAGS.run_once:
         break
       time.sleep(FLAGS.eval_interval_secs)

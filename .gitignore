@@ -1,4 +1,6 @@
 *.tmp
+*.txt
+*.zip
 *.pb
 *.swp
 *.swo
