@@ -66,11 +66,18 @@ tf.app.flags.DEFINE_integer('num_gpus', 8,
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
 
+tf.app.flags.DEFINE_integer('num_conv_layers', 4,
+                            """How many Convolution Layers to use.""")
+tf.app.flags.DEFINE_integer('num_recc_layers', 2,
+                            """How many Recurrent Layers to use.""")
+tf.app.flags.DEFINE_integer('recc_layer_size', 30,
+                            """Number of units in recc layer""")
+
 # TODO(smurching): Assert this while reading training examples
-tf.app.flags.DEFINE_integer('num_subsamples', 1324, 
+tf.app.flags.DEFINE_integer('num_subsamples', 1324,
                             """Number of sampled values for each MFCC coefficient""")
 
-tf.app.flags.DEFINE_integer('num_coeffs', 100, 
+tf.app.flags.DEFINE_integer('num_coeffs', 100,
                             """Number of MFCC coefficients""")
 
 tf.app.flags.DEFINE_string('train_data', None, 'Training data HDF5 file')
@@ -321,14 +328,14 @@ def train():
       # Save the model checkpoint periodically and freeze the graph.
       if step % 2000 == 0 or (step + 1) == FLAGS.max_steps:
         checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
-        saver.save(sess, checkpoint_path, global_step=step)        
+        saver.save(sess, checkpoint_path, global_step=step)
         # # Save model checkpoint.
         # print('Saving model checkpoint...')
         # checkpoint_prefix = os.path.join(FLAGS.train_dir, 'model.ckpt')
         # checkpoint_state_name = 'checkpoint_state'
         # checkpoint_path = saver.save(sess, checkpoint_prefix, global_step=step,
         #                              latest_filename=checkpoint_state_name)
-        
+
         # input_graph_name = 'input_graph.pb'
         # output_graph_name = "output_graph-{}.pb".format(step)
         # # Save model structure.
@@ -343,7 +350,7 @@ def train():
         # input_graph_path = os.path.join(FLAGS.train_dir, input_graph_name)
         # input_saver_def_path = ''
         # input_binary = False
-        # output_node_names = all_names 
+        # output_node_names = all_names
         # # output_node_names = 'global_step'
         # restore_op_name = 'save/restore_all'
         # filename_tensor_name = 'save/Const:0'
