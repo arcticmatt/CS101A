@@ -78,7 +78,7 @@ tf.app.flags.DEFINE_integer('num_coeffs', 100,
 
 tf.app.flags.DEFINE_string('train_data', None, 'Training data HDF5 file')
 
-tf.app.flags.DEFINE_integer('num_conv_layers', 4,
+tf.app.flags.DEFINE_integer('num_conv_layers', 6,
                             """How many Convolution Layers to use.""")
 tf.app.flags.DEFINE_integer('num_recc_layers', 2,
                             """How many Recurrent Layers to use.""")
