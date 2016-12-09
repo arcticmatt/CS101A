@@ -51,13 +51,14 @@ import tensorflow as tf
 import cifar10
 
 import train_utils
+import hdf5_reader
 
 import freeze_graph
 
 FLAGS = tf.app.flags.FLAGS
 
-READER = train_utils.HDF5BatchProcessor(filename=FLAGS.train_data,
-  batch_size=FLAGS.batch_size)
+READER = hdf5_reader.HDF5Reader(filename=FLAGS.train_data,
+  batch_size=FLAGS.batch_size, eval_batch_size=FLAGS.eval_batch_size)
 
 FEATURE_PLACEHOLDER_NAME = "FEATURES_PLACEHOLDER"
 LABEL_PLACEHOLDER_NAME = "LABEL_PLACEHOLDER"
@@ -195,7 +196,6 @@ def train():
     # Set up dict mapping GPU scopes to placeholders
     placeholder_dict = build_placeholder_dict()
 
-
     # Calculate the gradients for each model tower.
     tower_grads = []
     print("Num gpus = {}".format(FLAGS.num_gpus))
@@ -300,60 +300,9 @@ def train():
         summary_writer.add_summary(summary_str, step)
 
       # Save the model checkpoint periodically and freeze the graph.
-      if step % 2000 == 0 or (step + 1) == FLAGS.max_steps:
+      if step % 10 == 0 or (step + 1) == FLAGS.max_steps:
         checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
-        # # Save model checkpoint.
-        # print('Saving model checkpoint...')
-        # checkpoint_prefix = os.path.join(FLAGS.train_dir, 'model.ckpt')
-        # checkpoint_state_name = 'checkpoint_state'
-        # checkpoint_path = saver.save(sess, checkpoint_prefix, global_step=step,
-        #                              latest_filename=checkpoint_state_name)
-
-        # input_graph_name = 'input_graph.pb'
-        # output_graph_name = "output_graph-{}.pb".format(step)
-        # # Save model structure.
-        # print('Saving model structure...')
-        # tf.train.write_graph(sess.graph_def, FLAGS.train_dir, input_graph_name)
-
-        # # Get names of all tensors
-        # names = get_all_tensor_names(sess)
-        # all_names = ','.join(names)
-
-        # # Freeze graph.
-        # input_graph_path = os.path.join(FLAGS.train_dir, input_graph_name)
-        # input_saver_def_path = ''
-        # input_binary = False
-        # output_node_names = all_names
-        # # output_node_names = 'global_step'
-        # restore_op_name = 'save/restore_all'
-        # filename_tensor_name = 'save/Const:0'
-        # output_graph_path = os.path.join(FLAGS.train_dir, output_graph_name)
-        # clear_devices = False
-
-        # print('===== output_node_names = {} ====='.format(output_node_names))
-        # print('Freezing graph...')
-        # s = time.time()
-        # try:
-        #   with tf.Graph().as_default():
-        #     freeze_graph.freeze_graph(input_graph_path, input_saver_def_path,
-        #                               input_binary, checkpoint_path,
-        #                               output_node_names, restore_op_name,
-        #                               filename_tensor_name, output_graph_path,
-        #                               True, '')
-        # except Exception as e:
-        #   print('Freezing graph failed with exception {}'.format(e))
-        # print("Froze graph, took %s sec"%(time.time() - s))
-
-def get_all_tensor_names(sess):
-  names = [n.name for n in sess.graph_def.node if '/' not in n.name and n.name != 'init']
-  print('Number of output nodes = {}'.format(len(names)))
-  return names
-
-def get_all_op_names(sess):
-  op_names = [op.name for op in sess.graph.get_operations() if '/' not in op.name and op.name != 'init']
-  print('Number of op names = {}'.format(len(op_names)))
-  return op_names
 
 def redirect_output():
   prefix = datetime.now().strftime("%b-%d-%y-%I:%M:%S")

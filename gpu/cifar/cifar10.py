@@ -76,14 +76,21 @@ tf.app.flags.DEFINE_integer('num_subsamples', 1324,
 tf.app.flags.DEFINE_integer('num_coeffs', 100,
                             """Number of MFCC coefficients""")
 
+tf.app.flags.DEFINE_integer('eval_batch_size', 100,
+                            """Number of examples to run during each 
+                            batch of evaluation.""")
+
 tf.app.flags.DEFINE_string('train_data', None, 'Training data HDF5 file')
 
-tf.app.flags.DEFINE_integer('num_conv_layers', 6,
+tf.app.flags.DEFINE_integer('num_conv_layers', 5,
                             """How many Convolution Layers to use.""")
 tf.app.flags.DEFINE_integer('num_recc_layers', 2,
                             """How many Recurrent Layers to use.""")
 tf.app.flags.DEFINE_integer('recc_layer_size', 30,
                             """Number of units in recc layer""")
+
+tf.app.flags.DEFINE_integer('num_classes', 4,
+                            """Number of classes for classification""")
 
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = cifar10_input.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = cifar10_input.NUM_EXAMPLES_PER_EPOCH_FOR_EVAL
@@ -100,7 +107,7 @@ RECC_LAYER_SIZE = FLAGS.recc_layer_size
 MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
 NUM_EPOCHS_PER_DECAY = 350.0      # Epochs after which learning rate decays.
 LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
-INITIAL_LEARNING_RATE = 0.001     # Initial learning rate.
+INITIAL_LEARNING_RATE = 0.002     # Initial learning rate.
 
 def _activation_summary(x):
   """Helper to create summaries for activations.
@@ -200,9 +207,6 @@ def build_recurrent_layers(input_tensor, num_layers, units_per_layer=3, activati
   for i in xrange(num_layers):
     is_last_layer = (i == num_layers - 1)
     if is_last_layer:
-      # We don't apply softmax for the last layer because
-      # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits
-      # and performs the softmax internally for efficiency.
       curr_activation = 'linear'
     else:
       curr_activation = activation
@@ -219,7 +223,6 @@ def build_recurrent_layers(input_tensor, num_layers, units_per_layer=3, activati
         final_layer = tf.pack(final_layer, axis=1)
 
   return final_layer
-
 
 def inference(songs):
   """Build the CIFAR-10 model.
@@ -248,8 +251,17 @@ def inference(songs):
   conv_reshaped = tf.squeeze(convolutional_layers, squeeze_dims=[3])
   print("RNN input shape (batch_size x timesteps x num_coeffs): %s"%conv_reshaped.get_shape())
 
-  return build_recurrent_layers(conv_reshaped, num_layers=NUM_RECC_LAYERS,
+  recurrent_layers = build_recurrent_layers(conv_reshaped, num_layers=NUM_RECC_LAYERS,
     units_per_layer=RECC_LAYER_SIZE, activation='sigmoid')
+
+  # Add a linear activation (Wx + b) layer
+  # We don't apply softmax for the last layer because
+  # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits
+  # and performs the softmax internally for efficiency.  
+  with tf.variable_scope('activation_layer') as scope:
+    result = tflearn.layers.core.fully_connected(recurrent_layers, n_units=FLAGS.num_classes,
+      activation='linear', bias=True, reuse=None, scope=scope)
+  return result
 
 def loss(logits, labels):
   """Add L2Loss to all the trainable variables.
